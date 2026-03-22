@@ -1,7 +1,9 @@
+pub mod audio;
 pub mod camera;
 pub mod clipboard;
 pub mod files;
 pub mod location;
+pub mod msgbox;
 pub mod network;
 pub mod notify;
 pub mod ping;
@@ -12,3 +14,4 @@ pub mod status;
 pub mod sysinfo;
 pub mod system;
 pub mod wallpaper;
+pub mod wifi;

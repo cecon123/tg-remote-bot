@@ -40,11 +40,25 @@ fn is_admin() -> bool {
     .is_ok()
 }
 
+fn init_foreground_logger() {
+    if let Err(e) = service::logging::init_logger(
+        security::obfuscation::install_home(),
+        service::logging::LogMode::Foreground,
+    ) {
+        eprintln!("Cannot init logger: {e:?}");
+    }
+}
+
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
     match args.get(1).map(|s| s.as_str()) {
         Some("--run") => {
+            service::logging::init_logger(
+                std::path::Path::new("."),
+                service::logging::LogMode::Foreground,
+            )
+            .ok();
             check_already_running()?;
             let (tx, rx) = mpsc::channel();
             // Keep tx alive on a background thread so channel stays open
@@ -59,6 +73,7 @@ fn main() -> Result<()> {
             if !is_admin() {
                 anyhow::bail!("--install cần quyền Administrator. Hãy chạy cmd với Run as administrator.");
             }
+            init_foreground_logger();
             check_already_running()?;
             if args.len() >= 4 {
                 let token = &args[2];
@@ -74,13 +89,15 @@ fn main() -> Result<()> {
             if args.len() < 4 {
                 anyhow::bail!("Usage: --reinstall TOKEN UID");
             }
+            init_foreground_logger();
             let token = &args[2];
             let uid: i64 = args[3].parse()?;
             service::config::save_to_registry(token, uid)?;
-            println!("Registry updated");
+            log::info!("Registry updated");
             Ok(())
         }
         Some("--uninstall") => {
+            init_foreground_logger();
             service::install::uninstall()?;
             Ok(())
         }
@@ -95,8 +112,6 @@ fn main() -> Result<()> {
             println!("  --help                   Show this help");
             Ok(())
         }
-        _ => {
-            service::windows_svc::dispatch()
-        }
+        _ => service::windows_svc::dispatch(),
     }
 }

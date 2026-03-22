@@ -75,8 +75,6 @@ async fn sleep_with_shutdown(dur: Duration, rx: &Receiver<()>) {
 }
 
 pub async fn run_until(shutdown_rx: Receiver<()>) -> Result<()> {
-    env_logger::init();
-
     let cfg = config::load()?;
     let bot = Bot::new(&cfg.bot_token);
 

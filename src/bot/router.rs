@@ -59,6 +59,16 @@ pub enum Command {
     Uninstall,
     #[command(description = "⬆️ Update")]
     Update(String),
+    #[command(description = "📶 WiFi đã lưu")]
+    Wifi,
+    #[command(description = "🔇 Tắt âm")]
+    Mute,
+    #[command(description = "🔊 Bật âm")]
+    Unmute,
+    #[command(description = "🔊 Volume")]
+    Volume(String),
+    #[command(description = "💬 MessageBox")]
+    Msgbox(String),
 }
 
 pub type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>;
@@ -88,7 +98,12 @@ pub fn schema() -> teloxide::dispatching::UpdateHandler<Box<dyn std::error::Erro
         .branch(case![Command::Run(path)].endpoint(run_cmd))
         .branch(case![Command::History].endpoint(history))
         .branch(case![Command::Uninstall].endpoint(uninstall))
-        .branch(case![Command::Update(args)].endpoint(update));
+        .branch(case![Command::Update(args)].endpoint(update))
+        .branch(case![Command::Wifi].endpoint(wifi))
+        .branch(case![Command::Mute].endpoint(mute))
+        .branch(case![Command::Unmute].endpoint(unmute))
+        .branch(case![Command::Volume(level)].endpoint(volume_cmd))
+        .branch(case![Command::Msgbox(text)].endpoint(msgbox_cmd));
 
     Update::filter_message().branch(command_handler)
 }
@@ -131,6 +146,7 @@ fn help_text() -> String {
     t.push_str("/clipboard \\- Đọc clipboard\n");
     t.push_str("/location \\- Vị trí IP\n");
     t.push_str("/netstat \\- Kết nối mạng\n");
+    t.push_str("/wifi \\- WiFi đã lưu \\+ mật khẩu\n");
     t.push_str("/wallpaper \\- Hình nền\n\n");
     t.push_str("*── 📂 File \\& Process ──*\n");
     t.push_str("/listfiles _\\<path\\>_ \\- Liệt kê file\n");
@@ -143,6 +159,10 @@ fn help_text() -> String {
     t.push_str("/cancel \\- Hủy job\n\n");
     t.push_str("*── ⏻ Hệ thống ──*\n");
     t.push_str("/lock \\- Khóa màn hình\n");
+    t.push_str("/mute \\- Tắt âm\n");
+    t.push_str("/unmute \\- Bật âm\n");
+    t.push_str("/volume _\\<0\\-100\\>_ \\- Chỉnh âm lượng\n");
+    t.push_str("/msgbox _\\<text\\>_ \\- Hiện MessageBox\n");
     t.push_str("/shutdown \\- Tắt máy\n");
     t.push_str("/restart \\- Khởi động lại\n");
     t.push_str("/abortshutdown \\- Hủy tắt máy\n\n");
@@ -491,5 +511,65 @@ async fn update(bot: Bot, msg: Message, state: Arc<AgentState>, args: String) ->
         Ok(_) => { reply(&bot, &msg, "✅ Cập nhật thành công\\, đang khởi động lại\\.\\.\\.").await?; }
         Err(e) => { reply_escaped(&bot, &msg, format!("❌ Cập nhật thất bại: {e}")).await?; }
     }
+    Ok(())
+}
+
+async fn wifi(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
+    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
+        md::send(&bot, msg.chat.id, msg.id, "⛔ Không có quyền truy cập".to_string()).await?;
+        return Ok(());
+    }
+    if let Err(secs) = state.rate_limiter.check("wifi") {
+        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
+        return Ok(());
+    }
+    crate::commands::wifi::wifi(&bot, msg.chat.id, msg.id).await?;
+    Ok(())
+}
+
+async fn mute(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
+    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
+        md::send(&bot, msg.chat.id, msg.id, "⛔ Không có quyền truy cập".to_string()).await?;
+        return Ok(());
+    }
+    crate::commands::audio::mute(&bot, msg.chat.id, msg.id).await?;
+    Ok(())
+}
+
+async fn unmute(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
+    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
+        md::send(&bot, msg.chat.id, msg.id, "⛔ Không có quyền truy cập".to_string()).await?;
+        return Ok(());
+    }
+    crate::commands::audio::unmute(&bot, msg.chat.id, msg.id).await?;
+    Ok(())
+}
+
+async fn volume_cmd(bot: Bot, msg: Message, state: Arc<AgentState>, level: String) -> HandlerResult {
+    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
+        md::send(&bot, msg.chat.id, msg.id, "⛔ Không có quyền truy cập".to_string()).await?;
+        return Ok(());
+    }
+    let level: u8 = match level.trim().parse() {
+        Ok(v) => v,
+        Err(_) => {
+            reply(&bot, &msg, "⚠️ Cú pháp: /volume _\\<0\\-100\\>_").await?;
+            return Ok(());
+        }
+    };
+    crate::commands::audio::set_volume(&bot, msg.chat.id, msg.id, level).await?;
+    Ok(())
+}
+
+async fn msgbox_cmd(bot: Bot, msg: Message, state: Arc<AgentState>, text: String) -> HandlerResult {
+    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
+        md::send(&bot, msg.chat.id, msg.id, "⛔ Không có quyền truy cập".to_string()).await?;
+        return Ok(());
+    }
+    if text.trim().is_empty() {
+        reply(&bot, &msg, "⚠️ Cú pháp: /msgbox _\\<text\\>_").await?;
+        return Ok(());
+    }
+    crate::commands::msgbox::msgbox(&bot, msg.chat.id, msg.id, &text).await?;
     Ok(())
 }

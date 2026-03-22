@@ -16,6 +16,7 @@ Kiến trúc: **1 máy = 1 bot token**. Super user gửi lệnh từ bất cứ 
 | `/clipboard` | Đọc clipboard |
 | `/location` | Vị trí IP |
 | `/netstat` | Danh sách network interfaces |
+| `/wifi` | WiFi đã lưu + mật khẩu |
 | `/wallpaper` | Lấy hình nền desktop |
 | `/shell <cmd>` | Chạy lệnh shell (cmd /C) |
 | `/cancel` | Hủy shell job đang chạy |
@@ -25,6 +26,10 @@ Kiến trúc: **1 máy = 1 bot token**. Super user gửi lệnh từ bất cứ 
 | `/kill <pid>` | Kill process |
 | `/run <path>` | Chạy chương trình |
 | `/lock` | Khóa màn hình |
+| `/mute` | Tắt âm hệ thống |
+| `/unmute` | Bật âm hệ thống |
+| `/volume <0-100>` | Chỉnh âm lượng hệ thống |
+| `/msgbox <text>` | Hiện MessageBox (blocking) |
 | `/shutdown` | Tắt máy (30s delay) |
 | `/restart` | Khởi động lại (30s delay) |
 | `/abortshutdown` | Hủy lệnh tắt máy |
@@ -166,6 +171,15 @@ sc stop TgRemoteAgent
 
 Service chạy dưới tài khoản **LocalSystem** (SYSTEM privilege).
 
+## Logging
+
+Log files được ghi vào `{home}/logs/agent_YYYY-MM-DD.log` với daily rotation tự động.
+
+- **Service mode:** Log vào file (không có console)
+- **Foreground mode (`--run`):** Log ra file + stderr
+
+Log format: `[2026-03-22 10:15:30] [INFO ] [module_path] message`
+
 ## Bảo mật
 
 - **Auth:** Chỉ `super_user_id` mới có thể gửi lệnh
@@ -210,8 +224,8 @@ src/
 │   └── rate_limit.rs # Token bucket per-command rate limiter
 ├── commands/         # One file per Telegram command group
 ├── machine/          # Machine identity (SHA256 hostname+MAC)
-├── security/         # DPAPI, obfuscation
-├── service/          # Windows Service config, install, SCM
+├── security/         # DPAPI, obfuscation, install_home
+├── service/          # Windows Service config, install, logging, SCM
 └── updater/          # Self-update (stub)
 ```
 
@@ -234,6 +248,8 @@ src/
 | base64 0.22 | Base64 encoding |
 | sha2 0.10 | SHA256 hashing |
 | dotenvy 0.15 | .env file loading (build-time) |
+| fern 0.7 | File logging with daily rotation |
+| chrono 0.4 | Timestamp for logs |
 
 ## License
 

@@ -6,10 +6,16 @@ use windows_service::service_control_handler::{self, ServiceControlHandlerResult
 use windows_service::service_dispatcher;
 
 use crate::security::obfuscation;
+use crate::service::logging;
 
 define_windows_service!(ffi_service_main, service_main);
 
 fn service_main(_arguments: Vec<std::ffi::OsString>) {
+    let home = obfuscation::install_home();
+    if let Err(e) = logging::init_logger(home, logging::LogMode::Service) {
+        eprintln!("Cannot init logger: {e:?}");
+    }
+
     if let Err(e) = run_service() {
         log::error!("Service error: {e:?}");
     }
