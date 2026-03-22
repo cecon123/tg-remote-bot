@@ -1,0 +1,155 @@
+{
+  "version": 1,
+  "skills": {
+    "coding-guidelines": {
+      "source": "actionbook/rust-skills",
+      "sourceType": "github",
+      "computedHash": "5aec8481de78884af32ee3ac1efda3c0d355b2ca7c46717dc6ce5f5f1d476b88"
+    },
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "computedHash": "645b891da1edbae76ab79c7b088d4e73397464f8396edaf773c0e01971ce75d6"
+    },
+    "m01-ownership": {
+      "source": "actionbook/rust-skills",
+      "sourceType": "github",
+      "computedHash": "40ee119397748829904475e81bafcb4e16d0ed474d1d92fc9d1a9bf45e461c2a"
+    },
+    "m02-resource": {
+      "source": "ZhangHanDong/rust-skills",
+      "sourceType": "github",
+      "computedHash": "06c2cb0985dd7bc33f89e9ba58f25d2ad6814268e13a0cac3afd8e0e20f53ebb"
+    },
+    "m04-zero-cost": {
+      "source": "actionbook/rust-skills",
+      "sourceType": "github",
+      "computedHash": "95fd1808fe1240025f9bb448e17cf96a58102c94fe547a2087f2c0ab71117878"
+    },
+    "m07-concurrency": {
+      "source": "actionbook/rust-skills",
+      "sourceType": "github",
+      "computedHash": "b8d9a2048345a6d91def369fbc36340b7c47c3cefae974d5aab80aa3c1a0e46c"
+    },
+    "m10-performance": {
+      "source": "actionbook/rust-skills",
+      "sourceType": "github",
+      "computedHash": "6945acaf86bd024e6cade6b71d23026e4969909592eb12ea03e75ed6d3b3a25e"
+    },
+    "m11-ecosystem": {
+      "source": "actionbook/rust-skills",
+      "sourceType": "github",
+      "computedHash": "bf80e501b0acba4fc732fe7282758807372f2a91850fbfd052b7e873915bded2"
+    },
+    "m12-lifecycle": {
+      "source": "actionbook/rust-skills",
+      "sourceType": "github",
+      "computedHash": "66895917c0d6ce31b365ecfd930db3682698a0b90794b22c3b7ef4c6c13b1ba6"
+    },
+    "rust-actor": {
+      "source": "huiali/rust-skills",
+      "sourceType": "github",
+      "computedHash": "d2a10a3ceabcae829ef63480cf19f7ad6fe3e61c3746719434e4f0c7288fcd15"
+    },
+    "rust-anti-pattern": {
+      "source": "huiali/rust-skills",
+      "sourceType": "github",
+      "computedHash": "cf05a1c1c84165c7bd552ed85bd4d4a17787e55f39ee4aba5c5dd2198f148179"
+    },
+    "rust-async": {
+      "source": "huiali/rust-skills",
+      "sourceType": "github",
+      "computedHash": "009fc1da01d59a35eb761eba5bd39a056e6090030e0002c3ca067c2cfd0dd5dc"
+    },
+    "rust-async-pattern": {
+      "source": "huiali/rust-skills",
+      "sourceType": "github",
+      "computedHash": "1d874d580a7f06562bd86784b4eeef97ed776705431af1a3f9b618de213682d1"
+    },
+    "rust-concurrency": {
+      "source": "huiali/rust-skills",
+      "sourceType": "github",
+      "computedHash": "a0ddb2ace008d1dc995199c00cc1ce337b107e2dcd45acfa22a3a1fe35b7dd08"
+    },
+    "rust-const": {
+      "source": "huiali/rust-skills",
+      "sourceType": "github",
+      "computedHash": "eb973169121f0210c1be5e95fba798c477fd932b5d8ada7377cb5e93e53af0c2"
+    },
+    "rust-ecosystem": {
+      "source": "huiali/rust-skills",
+      "sourceType": "github",
+      "computedHash": "70aab89d7f0402c30c83b17c578d2a6587e01299b23ed3be5b14c6140603749e"
+    },
+    "rust-error": {
+      "source": "huiali/rust-skills",
+      "sourceType": "github",
+      "computedHash": "562d7f9ecddb97d00d51108cfea2dbcbcc59185b4b63c35b4bc6c65fbbb65728"
+    },
+    "rust-error-advanced": {
+      "source": "huiali/rust-skills",
+      "sourceType": "github",
+      "computedHash": "7af4b529b5cab4b49e0398bb38ee858ea5e52e681d4786372a2ea99f87e502b3"
+    },
+    "rust-ffi": {
+      "source": "huiali/rust-skills",
+      "sourceType": "github",
+      "computedHash": "f45284b84beb192d473527bbe74ab655a2fc5d55f97dc44fd7e338e3a2119af7"
+    },
+    "rust-learner": {
+      "source": "huiali/rust-skills",
+      "sourceType": "github",
+      "computedHash": "1a741152419b45fd877e92b61d3e156b4dbf954aaccc74d391add6676bad547e"
+    },
+    "rust-mcp-server-generator": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "computedHash": "420ae9213c67ac826ea54fbc3d7571189d74f22f3dfda3645fd3c6f7277c4944"
+    },
+    "rust-middleware": {
+      "source": "huiali/rust-skills",
+      "sourceType": "github",
+      "computedHash": "9c7f603bb528d73591b00c0533eefa1b88fcc30ca36664345264e17cac12dd3c"
+    },
+    "rust-ownership": {
+      "source": "huiali/rust-skills",
+      "sourceType": "github",
+      "computedHash": "7007cf58152660014ebe082453eed299878d4853193a4bf36a9053d2e46aa8e6"
+    },
+    "rust-performance": {
+      "source": "huiali/rust-skills",
+      "sourceType": "github",
+      "computedHash": "b43ca9547d66b70bc8fd1c109acdc841c8869d1eedb9762789fe9353a36b7ffa"
+    },
+    "rust-skill": {
+      "source": "huiali/rust-skills",
+      "sourceType": "github",
+      "computedHash": "d27732cd8c999ed196ca852c3890359b7dfaae816936498ea477a1f5fecbf525"
+    },
+    "rust-skill-creator": {
+      "source": "actionbook/rust-skills",
+      "sourceType": "github",
+      "computedHash": "c9ea80eb2e0f84b6af172f4260960ded66485a7aaf2725a23b12c3671fa0eac5"
+    },
+    "rust-symbol-analyzer": {
+      "source": "ZhangHanDong/rust-skills",
+      "sourceType": "github",
+      "computedHash": "6014f13bcb77d9ca5a676be25121451ef462e5c7343cb2a3fff30f0d4d121ed6"
+    },
+    "rust-trait-explorer": {
+      "source": "actionbook/rust-skills",
+      "sourceType": "github",
+      "computedHash": "e3a9f3c4cfdc8534ea0f963e55c5f871e710a9b2fe0ddb09a77701d15dd7ac8a"
+    },
+    "rust-unsafe": {
+      "source": "huiali/rust-skills",
+      "sourceType": "github",
+      "computedHash": "dd71d31723d302c14282e1d818859f7e2ccbcf9d8c61e1b131f581b4711b3c16"
+    },
+    "unsafe-checker": {
+      "source": "actionbook/rust-skills",
+      "sourceType": "github",
+      "computedHash": "b63b238f2d47dc32ca026d8a1401eee24e0083f6057202aaa921075cc29a05eb"
+    }
+  }
+}

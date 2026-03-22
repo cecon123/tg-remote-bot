@@ -1,0 +1,12 @@
+[package]
+name = "tg-remote-bot"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+nokhwa = "0.10.10"
+sysinfo = "0.38.4"
+teloxide = "0.17.0"
+tokio = "1.50.0"
+windows-service = "0.8.0"
+windows-sys = "0.61.2"
