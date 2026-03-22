@@ -97,9 +97,9 @@
       "computedHash": "f45284b84beb192d473527bbe74ab655a2fc5d55f97dc44fd7e338e3a2119af7"
     },
     "rust-learner": {
-      "source": "huiali/rust-skills",
+      "source": "actionbook/rust-skills",
       "sourceType": "github",
-      "computedHash": "1a741152419b45fd877e92b61d3e156b4dbf954aaccc74d391add6676bad547e"
+      "computedHash": "61453342609f7fc3575f7ab72f2898ed993ad59223eeac46ea493794f9880878"
     },
     "rust-mcp-server-generator": {
       "source": "github/awesome-copilot",
@@ -120,6 +120,11 @@
       "source": "huiali/rust-skills",
       "sourceType": "github",
       "computedHash": "b43ca9547d66b70bc8fd1c109acdc841c8869d1eedb9762789fe9353a36b7ffa"
+    },
+    "rust-router": {
+      "source": "actionbook/rust-skills",
+      "sourceType": "github",
+      "computedHash": "5f7b657d5b7cb55edc16227e40e5ad192e17f2b9457d2a87a5715a8c36f57f5d"
     },
     "rust-skill": {
       "source": "huiali/rust-skills",
