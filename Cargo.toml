@@ -8,7 +8,6 @@ teloxide = { version = "0.17", features = ["macros"] }
 tokio = { version = "1.50.0", features = ["full"] }
 sha2 = "0.10.9"
 hex = "0.4.3"
-screenshots = "0.8.10"
 sysinfo = "0.38.4"
 image = "0.25.10"
 log = "0.4.29"
@@ -42,6 +41,8 @@ windows-sys = { version = "0.61.2", features = [
     "Win32_NetworkManagement_Ndis",
     "Win32_Networking_WinSock",
     "Win32_System_WindowsProgramming",
+    "Win32_Graphics_Gdi",
+    "Win32_System_StationsAndDesktops",
 ] }
 
 [profile.release]
