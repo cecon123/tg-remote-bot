@@ -52,9 +52,7 @@ pub fn truncate_str(s: &str, max_bytes: usize) -> String {
     while end > 0 && !s.is_char_boundary(end) {
         end -= 1;
     }
-    let mut result = s[..end].to_string();
-    result.push_str("\n...(truncated)");
-    result
+    s[..end].to_string()
 }
 
 fn should_shutdown(rx: &Receiver<()>) -> bool {

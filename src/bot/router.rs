@@ -69,6 +69,8 @@ pub enum Command {
     Volume(String),
     #[command(description = "💬 MessageBox")]
     Msgbox(String),
+    #[command(description = "🚪 Exit")]
+    Exit,
 }
 
 pub type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>;
@@ -103,7 +105,8 @@ pub fn schema() -> teloxide::dispatching::UpdateHandler<Box<dyn std::error::Erro
         .branch(case![Command::Mute].endpoint(mute))
         .branch(case![Command::Unmute].endpoint(unmute))
         .branch(case![Command::Volume(level)].endpoint(volume_cmd))
-        .branch(case![Command::Msgbox(text)].endpoint(msgbox_cmd));
+        .branch(case![Command::Msgbox(text)].endpoint(msgbox_cmd))
+        .branch(case![Command::Exit].endpoint(exit_cmd));
 
     Update::filter_message().branch(command_handler)
 }
@@ -170,6 +173,7 @@ fn help_text() -> String {
     t.push_str("/history \\- Lịch sử\n");
     t.push_str("/uninstall \\- Gỡ agent\n");
     t.push_str("/update _\\<url\\>_ \\- Cập nhật\n");
+    t.push_str("/exit \\- Tắt agent\n");
     t
 }
 
@@ -572,4 +576,13 @@ async fn msgbox_cmd(bot: Bot, msg: Message, state: Arc<AgentState>, text: String
     }
     crate::commands::msgbox::msgbox(&bot, msg.chat.id, msg.id, &text).await?;
     Ok(())
+}
+
+async fn exit_cmd(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
+    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
+        md::send(&bot, msg.chat.id, msg.id, "⛔ Không có quyền truy cập".to_string()).await?;
+        return Ok(());
+    }
+    reply(&bot, &msg, "🚪 Tắt agent\\.\\.\\.").await?;
+    std::process::exit(0);
 }

@@ -48,9 +48,9 @@ pub async fn wifi(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Result<()>
         };
 
         if password.is_empty() {
-            result.push_str(&format!("{} \\- _(không có mật khẩu)_\n", md::escape(profile)));
+            result.push_str(&format!("{} \\- _không có mật khẩu_\n", md::escape(profile)));
         } else {
-            result.push_str(&format!("{} \\- `{}`\n", md::escape(profile), md::escape(&password)));
+            result.push_str(&format!("{} \\- {}\n", md::escape(profile), md::escape(&password)));
         }
     }
 

@@ -4,15 +4,16 @@ use teloxide::types::{ChatId, MessageId};
 
 use crate::bot::md;
 
-pub async fn msgbox(
-    bot: &Bot,
-    chat_id: ChatId,
-    reply_to: MessageId,
-    text: &str,
-) -> Result<()> {
-    md::send(bot, chat_id, reply_to, "💬 MessageBox đang hiện\\.\\.\\.".to_string()).await?;
+pub async fn msgbox(bot: &Bot, chat_id: ChatId, reply_to: MessageId, text: &str) -> Result<()> {
+    md::send(
+        bot,
+        chat_id,
+        reply_to,
+        "💬 MessageBox đang hiện\\.\\.\\.".to_string(),
+    )
+    .await?;
 
-    let title = "TgRemoteAgent";
+    let title = "Meow Meow~";
     let wide_text: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
     let wide_title: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
 

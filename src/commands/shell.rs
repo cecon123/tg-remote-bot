@@ -69,9 +69,11 @@ pub async fn shell(
         let _ = child.wait().await;
 
         if output.is_empty() { output = "(no output)".to_string(); }
-        let output = crate::bot::truncate_str(&output, 3800);
+        let truncated = crate::bot::truncate_str(&output, 3800);
+        let suffix = if truncated.len() < output.len() { "\n...(truncated)" } else { "" };
+        let escaped = md::escape(&format!("{truncated}{suffix}"));
 
-        let _ = md::send(&bot_clone, chat, rto, format!("📤 *Output:*\n\n{}", md::escape(&output))).await;
+        let _ = md::send(&bot_clone, chat, rto, format!("📤 *Output:*\n\n{escaped}")).await;
     });
 
     {

@@ -28,16 +28,18 @@ pub async fn listfiles(bot: &Bot, chat_id: ChatId, reply_to: MessageId, path: &s
             } else {
                 "📄"
             };
-            entries.push(format!("{} {} \\({} bytes\\)", kind, md::escape(&name), size));
+            entries.push(format!("{kind} {name} ({size} bytes)"));
         }
     }
 
     if entries.is_empty() {
         md::send(bot, chat_id, reply_to, "📭 Thư mục trống".to_string()).await?;
     } else {
-        let text = entries.join("\n");
-        let text = crate::bot::truncate_str(&text, 3800);
-        md::send(bot, chat_id, reply_to, format!("*📂 {}*\n\n{}", md::escape(path), text)).await?;
+        let full = entries.join("\n");
+        let truncated = crate::bot::truncate_str(&full, 3800);
+        let suffix = if truncated.len() < full.len() { "\n...(truncated)" } else { "" };
+        let escaped = md::escape(&format!("{truncated}{suffix}"));
+        md::send(bot, chat_id, reply_to, format!("*📂 {}*\n\n{escaped}", md::escape(path))).await?;
     }
 
     Ok(())
