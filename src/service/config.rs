@@ -10,8 +10,8 @@ pub struct AppConfig {
 
 pub fn load() -> Result<AppConfig> {
     let reg_path = obfuscation::registry_path();
-    let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
-    let key = hkcu
+    let hklm = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE);
+    let key = hklm
         .open_subkey(reg_path)
         .context("cannot open registry key — run --install TOKEN UID first")?;
 
@@ -40,8 +40,8 @@ pub fn save_to_registry(token: &str, super_user_id: i64) -> Result<()> {
     let enc_uid = dpapi::protect(super_user_id.to_string().as_bytes())?;
 
     let reg_path = obfuscation::registry_path();
-    let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
-    let (key, _) = hkcu
+    let hklm = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE);
+    let (key, _) = hklm
         .create_subkey(reg_path)
         .context("cannot create registry key")?;
 

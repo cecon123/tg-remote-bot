@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use base64::Engine;
 use windows_sys::Win32::Foundation::LocalFree;
 use windows_sys::Win32::Security::Cryptography::{
-    CRYPT_INTEGER_BLOB, CryptProtectData, CryptUnprotectData,
+    CRYPT_INTEGER_BLOB, CRYPTPROTECT_LOCAL_MACHINE, CryptProtectData, CryptUnprotectData,
 };
 
 pub fn protect(data: &[u8]) -> Result<String> {
@@ -22,7 +22,7 @@ pub fn protect(data: &[u8]) -> Result<String> {
             std::ptr::null(),
             std::ptr::null(),
             std::ptr::null(),
-            0,
+            CRYPTPROTECT_LOCAL_MACHINE,
             &mut blob_out,
         )
     };
@@ -58,7 +58,7 @@ pub fn unprotect(encoded: &str) -> Result<Vec<u8>> {
             std::ptr::null(),
             std::ptr::null(),
             std::ptr::null(),
-            0,
+            CRYPTPROTECT_LOCAL_MACHINE,
             &mut blob_out,
         )
     };
