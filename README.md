@@ -14,7 +14,7 @@ Kiến trúc: **1 máy = 1 bot token**. Super user gửi lệnh từ bất cứ 
 | `/camera` | Chụp webcam |
 | `/sysinfo` | CPU, RAM, disk, network |
 | `/clipboard` | Đọc clipboard |
-| `/location` | Vị trí IP |
+| `/location` | Vị trí IP (đã định dạng) |
 | `/netstat` | Danh sách network interfaces |
 | `/wifi` | WiFi đã lưu + mật khẩu |
 | `/wallpaper` | Lấy hình nền desktop |
@@ -238,16 +238,22 @@ cargo test test_name_here
 src/
 ├── main.rs           # CLI, mutex check, admin check, SCM dispatch
 ├── bot/
-│   ├── mod.rs        # AgentState, run_until() with retry loop
+│   ├── mod.rs        # AgentState, run_until() with retry loop, truncate_str()
 │   ├── auth.rs       # is_authorized()
 │   ├── md.rs         # MarkdownV2 escape/send helpers
-│   ├── router.rs     # Command enum, all handler functions
+│   ├── router.rs     # Command enum, handler functions, ensure_authorized()
 │   └── rate_limit.rs # Token bucket per-command rate limiter
 ├── commands/         # One file per Telegram command group
-├── machine/          # Machine identity (SHA256 hostname+MAC)
+├── machine/
+│   ├── mod.rs
+│   └── session.rs    # User session process spawning (CreateProcessAsUserW)
 ├── security/         # DPAPI, obfuscation, install_home
-├── service/          # Windows Service config, install, logging, SCM
-└── updater/          # Self-update + auto-update
+├── service/
+│   ├── config.rs     # Registry-only config (DPAPI encrypted)
+│   ├── install.rs    # SCM install/uninstall + cleanup_old_files()
+│   ├── logging.rs    # DailyFile writer + init_logger()
+│   └── windows_svc.rs # define_windows_service! + SCM dispatch
+└── updater/          # Self-update + auto-update from GitHub
 ```
 
 ## Dependencies
@@ -271,6 +277,42 @@ src/
 | sha2 0.10 | SHA256 hashing |
 | fern 0.7 | File logging with daily rotation |
 | chrono 0.4 | Timestamp for logs |
+
+## Changelog
+
+### v1.2.0
+
+**Bug fixes:**
+- Fix unsigned integer underflow in disk usage calculation (`sysinfo`)
+- Fix `wifi` password parsing: `split(':').nth(1)` → `split_once(':')` to handle passwords containing `:`
+- Fix `unmute` command: now correctly sends `VOLUME_MUTE` to toggle mute off (was incorrectly sending `VOLUME_UP`)
+- Fix `LockWorkStation` API path: moved from `Win32::UI::WindowsAndMessaging` to `Win32::System::Shutdown`
+- Fix `DuplicateTokenEx` module path: use `Security` module instead of `Threading`
+
+**Performance & reliability:**
+- Shell command: read stdout/stderr concurrently to prevent pipe deadlock
+- Location command: use HTTPS endpoint for IP geolocation API
+- Location command: parse and format JSON response instead of raw output
+
+**Code quality:**
+- Extract auth check duplication into `ensure_authorized()` helper (was duplicated 30+ times)
+- Refactor `update` handler: reduce nesting, extract `fetch_github_update_url()`
+- Refactor `shutdown`/`restart`/`abort` into shared `run_shutdown_cmd()` helper
+- Extract duplicated `cleanup_old_files()` to `service::install` module
+- Replace `.unwrap()` on mutex locks with `.unwrap_or_else(|e| e.into_inner())` throughout
+- Fix `session.rs` function signatures: `&PathBuf` → `&Path`
+- Fix `session.rs` function signatures: `Vec<String>` callers consistency
+- Remove dead code: `audio_powershell()` function (had logic error and referenced nonexistent function)
+- Clean up `audio.rs`: replace 30 copy-pasted `VOLUME_DOWN` lines with PowerShell loop
+- Extract duplicated PowerShell execution into `run_powershell()` helper
+- Add missing rate limits for `wifi`, `mute`, `unmute`, `volume`, `msgbox`, `help`, `exit` commands
+
+**API improvements:**
+- `/location` now returns formatted data (IP, country, city, ISP, coordinates) instead of raw JSON
+
+### v1.1.1
+
+Previous stable release.
 
 ## License
 

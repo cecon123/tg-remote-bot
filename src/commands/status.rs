@@ -14,7 +14,7 @@ pub async fn status(
     let uptime = crate::bot::format_duration(state.start_time.elapsed().as_secs());
 
     let job_status = {
-        let job = state.active_job.lock().unwrap();
+        let job = state.active_job.lock().unwrap_or_else(|e| e.into_inner());
         if job.is_some() {
             "🔴 *Running*"
         } else {

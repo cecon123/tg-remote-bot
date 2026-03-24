@@ -9,6 +9,17 @@ use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
 
 use crate::security::obfuscation;
 
+pub fn cleanup_old_files() {
+    let home = obfuscation::install_home();
+    if let Ok(entries) = std::fs::read_dir(home) {
+        for entry in entries.flatten() {
+            if entry.path().extension().is_some_and(|e| e == "old") {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+}
+
 pub fn setup_home_dir() -> Result<(PathBuf, PathBuf)> {
     let home = obfuscation::install_home();
     std::fs::create_dir_all(home)

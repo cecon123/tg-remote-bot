@@ -46,8 +46,8 @@ pub async fn wifi(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Result<()>
                 let s = String::from_utf8_lossy(&o.stdout);
                 s.lines()
                     .find(|l| l.contains("Key Content"))
-                    .and_then(|l| l.split(':').nth(1))
-                    .map(|p| p.trim().to_string())
+                    .and_then(|l| l.split_once(':'))
+                    .map(|(_, v)| v.trim().to_string())
                     .unwrap_or_default()
             }
             Err(_) => String::new(),

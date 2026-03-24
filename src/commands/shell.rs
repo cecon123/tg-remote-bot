@@ -16,7 +16,7 @@ pub async fn shell(
     cmd: &str,
 ) -> Result<()> {
     let already_running = {
-        let job = active_job.lock().unwrap();
+        let job = active_job.lock().unwrap_or_else(|e| e.into_inner());
         job.is_some()
     };
     if already_running {
@@ -63,32 +63,51 @@ pub async fn shell(
     let rto = reply_to;
 
     let handle = tokio::spawn(async move {
-        let mut output = String::new();
+        let mut stdout_buf = String::new();
+        let mut stderr_buf = String::new();
 
-        if let Some(stdout) = child.stdout.take() {
-            let mut reader = BufReader::new(stdout).lines();
-            while let Ok(Some(line)) = reader.next_line().await {
-                output.push_str(&line);
-                output.push('\n');
-                if output.len() > 3800 {
-                    break;
+        let stdout_handle = child.stdout.take().map(|stdout| {
+            tokio::spawn(async move {
+                let mut buf = String::new();
+                let mut reader = BufReader::new(stdout).lines();
+                while let Ok(Some(line)) = reader.next_line().await {
+                    buf.push_str(&line);
+                    buf.push('\n');
+                    if buf.len() > 3800 {
+                        break;
+                    }
                 }
-            }
+                buf
+            })
+        });
+
+        let stderr_handle = child.stderr.take().map(|stderr| {
+            tokio::spawn(async move {
+                let mut buf = String::new();
+                let mut reader = BufReader::new(stderr).lines();
+                while let Ok(Some(line)) = reader.next_line().await {
+                    buf.push_str("ERR: ");
+                    buf.push_str(&line);
+                    buf.push('\n');
+                    if buf.len() > 3800 {
+                        break;
+                    }
+                }
+                buf
+            })
+        });
+
+        if let Some(h) = stdout_handle {
+            stdout_buf = h.await.unwrap_or_default();
         }
-
-        if let Some(stderr) = child.stderr.take() {
-            let mut reader = BufReader::new(stderr).lines();
-            while let Ok(Some(line)) = reader.next_line().await {
-                output.push_str("ERR: ");
-                output.push_str(&line);
-                output.push('\n');
-                if output.len() > 3800 {
-                    break;
-                }
-            }
+        if let Some(h) = stderr_handle {
+            stderr_buf = h.await.unwrap_or_default();
         }
 
         let _ = child.wait().await;
+
+        let mut output = stdout_buf;
+        output.push_str(&stderr_buf);
 
         if output.is_empty() {
             output = "(no output)".to_string();
@@ -105,7 +124,7 @@ pub async fn shell(
     });
 
     {
-        let mut job = active_job.lock().unwrap();
+        let mut job = active_job.lock().unwrap_or_else(|e| e.into_inner());
         *job = Some(RunningJob { pid, handle });
     }
 

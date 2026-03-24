@@ -38,6 +38,13 @@ impl RateLimiter {
             ("history", 10, 0.333),
             ("update", 1, 0.003),
             ("uninstall", 1, 0.003),
+            ("wifi", 5, 0.2),
+            ("mute", 5, 0.2),
+            ("unmute", 5, 0.2),
+            ("volume", 5, 0.2),
+            ("msgbox", 3, 0.1),
+            ("help", 10, 0.333),
+            ("exit", 1, 0.017),
         ];
 
         for &(name, cap, rate) in rules {
@@ -58,7 +65,7 @@ impl RateLimiter {
     }
 
     pub fn check(&self, command: &str) -> Result<(), u64> {
-        let mut buckets = self.buckets.lock().unwrap();
+        let mut buckets = self.buckets.lock().unwrap_or_else(|e| e.into_inner());
 
         if let Some(bucket) = buckets.get_mut(command) {
             let now = Instant::now();

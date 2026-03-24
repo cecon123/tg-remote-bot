@@ -8,6 +8,8 @@ use teloxide::utils::command::BotCommands;
 
 use crate::bot::{AgentState, auth, md};
 
+const ACCESS_DENIED: &str = "⛔ Không có quyền truy cập";
+
 #[derive(BotCommands, Clone)]
 #[command(rename_rule = "lowercase", description = "📋 Commands:")]
 pub enum Command {
@@ -136,6 +138,14 @@ async fn reply_escaped(bot: &Bot, msg: &Message, text: impl Into<String>) -> Res
     Ok(())
 }
 
+async fn ensure_authorized(bot: &Bot, msg: &Message, state: &AgentState) -> Result<bool> {
+    if !auth::is_authorized(get_user_id(msg), state.super_user_id) {
+        md::send(bot, msg.chat.id, msg.id, ACCESS_DENIED.to_string()).await?;
+        return Ok(false);
+    }
+    Ok(true)
+}
+
 fn help_text() -> String {
     let mut t = String::new();
     t.push_str("*🤖 TG Remote Bot*\n\n");
@@ -179,14 +189,7 @@ fn help_text() -> String {
 }
 
 async fn help(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     reply(&bot, &msg, help_text()).await?;
@@ -194,14 +197,7 @@ async fn help(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
 }
 
 async fn ping(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     crate::commands::ping::ping(&bot, msg.chat.id, msg.id, &state).await?;
@@ -209,14 +205,7 @@ async fn ping(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
 }
 
 async fn status(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     crate::commands::status::status(&bot, msg.chat.id, msg.id, &state).await?;
@@ -224,14 +213,7 @@ async fn status(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult
 }
 
 async fn screenshot(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if let Err(secs) = state.rate_limiter.check("screenshot") {
@@ -243,14 +225,7 @@ async fn screenshot(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerRe
 }
 
 async fn shell(bot: Bot, msg: Message, state: Arc<AgentState>, cmd: String) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if cmd.trim().is_empty() {
@@ -266,18 +241,11 @@ async fn shell(bot: Bot, msg: Message, state: Arc<AgentState>, cmd: String) -> H
 }
 
 async fn cancel_cmd(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     let handle = {
-        let mut job = state.active_job.lock().unwrap();
+        let mut job = state.active_job.lock().unwrap_or_else(|e| e.into_inner());
         job.take().map(|r| r.handle)
     };
     if let Some(handle) = handle {
@@ -290,14 +258,7 @@ async fn cancel_cmd(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerRe
 }
 
 async fn sysinfo(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if let Err(secs) = state.rate_limiter.check("sysinfo") {
@@ -309,14 +270,7 @@ async fn sysinfo(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResul
 }
 
 async fn camera(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if let Err(secs) = state.rate_limiter.check("camera") {
@@ -328,14 +282,7 @@ async fn camera(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult
 }
 
 async fn listfiles(bot: Bot, msg: Message, state: Arc<AgentState>, path: String) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if path.trim().is_empty() {
@@ -351,14 +298,7 @@ async fn listfiles(bot: Bot, msg: Message, state: Arc<AgentState>, path: String)
 }
 
 async fn getfile(bot: Bot, msg: Message, state: Arc<AgentState>, path: String) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if path.trim().is_empty() {
@@ -374,14 +314,7 @@ async fn getfile(bot: Bot, msg: Message, state: Arc<AgentState>, path: String) -
 }
 
 async fn procs(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if let Err(secs) = state.rate_limiter.check("procs") {
@@ -393,14 +326,7 @@ async fn procs(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult 
 }
 
 async fn kill(bot: Bot, msg: Message, state: Arc<AgentState>, pid: String) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if pid.trim().is_empty() {
@@ -423,14 +349,7 @@ async fn kill(bot: Bot, msg: Message, state: Arc<AgentState>, pid: String) -> Ha
 }
 
 async fn netstat(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if let Err(secs) = state.rate_limiter.check("netstat") {
@@ -442,14 +361,7 @@ async fn netstat(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResul
 }
 
 async fn clipboard(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if let Err(secs) = state.rate_limiter.check("clipboard") {
@@ -461,14 +373,7 @@ async fn clipboard(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerRes
 }
 
 async fn location(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if let Err(secs) = state.rate_limiter.check("location") {
@@ -480,14 +385,7 @@ async fn location(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResu
 }
 
 async fn wallpaper(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if let Err(secs) = state.rate_limiter.check("wallpaper") {
@@ -499,14 +397,7 @@ async fn wallpaper(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerRes
 }
 
 async fn lock(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if let Err(secs) = state.rate_limiter.check("lock") {
@@ -518,14 +409,7 @@ async fn lock(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
 }
 
 async fn shutdown(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if let Err(secs) = state.rate_limiter.check("shutdown") {
@@ -537,14 +421,7 @@ async fn shutdown(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResu
 }
 
 async fn restart(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if let Err(secs) = state.rate_limiter.check("restart") {
@@ -556,14 +433,7 @@ async fn restart(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResul
 }
 
 async fn abortshutdown(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if let Err(secs) = state.rate_limiter.check("abortshutdown") {
@@ -575,14 +445,7 @@ async fn abortshutdown(bot: Bot, msg: Message, state: Arc<AgentState>) -> Handle
 }
 
 async fn run_cmd(bot: Bot, msg: Message, state: Arc<AgentState>, path: String) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if path.trim().is_empty() {
@@ -598,14 +461,7 @@ async fn run_cmd(bot: Bot, msg: Message, state: Arc<AgentState>, path: String) -
 }
 
 async fn history(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if let Err(secs) = state.rate_limiter.check("history") {
@@ -617,14 +473,7 @@ async fn history(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResul
 }
 
 async fn uninstall(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     match crate::service::install::uninstall() {
@@ -639,14 +488,7 @@ async fn uninstall(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerRes
 }
 
 async fn update(bot: Bot, msg: Message, state: Arc<AgentState>, args: String) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if let Err(secs) = state.rate_limiter.check("update") {
@@ -654,19 +496,10 @@ async fn update(bot: Bot, msg: Message, state: Arc<AgentState>, args: String) ->
         return Ok(());
     }
 
-    if args.trim().is_empty() {
+    let url = if args.trim().is_empty() {
         reply(&bot, &msg, "🔍 Đang kiểm tra version từ GitHub\\.\\.\\.").await?;
-        let (ver, url) = match crate::updater::self_update::check_remote_version().await {
-            Ok(Some(ver)) => {
-                let url = match crate::updater::self_update::find_asset_url().await {
-                    Ok(u) => u,
-                    Err(e) => {
-                        reply_escaped(&bot, &msg, format!("❌ Không tìm thấy asset: {e}")).await?;
-                        return Ok(());
-                    }
-                };
-                (ver, url)
-            }
+        match fetch_github_update_url().await {
+            Ok(Some(url)) => url,
             Ok(None) => {
                 reply(&bot, &msg, "✅ Đang dùng version mới nhất").await?;
                 return Ok(());
@@ -675,44 +508,33 @@ async fn update(bot: Bot, msg: Message, state: Arc<AgentState>, args: String) ->
                 reply_escaped(&bot, &msg, format!("❌ Không check được version: {e}")).await?;
                 return Ok(());
             }
-        };
-        reply(
-            &bot,
-            &msg,
-            format!(
-                "📦 Phiên bản mới: *{}*\\, đang tải về và cập nhật\\.\\.\\.",
-                md::escape(&ver)
-            ),
-        )
-        .await?;
-        match crate::updater::self_update::self_update(&url).await {
-            Ok(_) => {}
-            Err(e) => {
-                reply_escaped(&bot, &msg, format!("❌ Cập nhật thất bại: {e}")).await?;
-            }
         }
     } else {
-        let url = args.trim();
-        reply(&bot, &msg, "⬇️ Đang tải về và cập nhật\\.\\.\\.").await?;
-        match crate::updater::self_update::self_update(url).await {
-            Ok(_) => {}
-            Err(e) => {
-                reply_escaped(&bot, &msg, format!("❌ Cập nhật thất bại: {e}")).await?;
-            }
-        }
+        args.trim().to_string()
+    };
+
+    reply(&bot, &msg, "⬇️ Đang tải về và cập nhật\\.\\.\\.").await?;
+    if let Err(e) = crate::updater::self_update::self_update(&url).await {
+        reply_escaped(&bot, &msg, format!("❌ Cập nhật thất bại: {e}")).await?;
     }
     Ok(())
 }
 
+async fn fetch_github_update_url() -> Result<Option<String>> {
+    let (ver, url) = match crate::updater::self_update::check_remote_version().await {
+        Ok(Some(ver)) => {
+            let url = crate::updater::self_update::find_asset_url().await?;
+            (ver, url)
+        }
+        Ok(None) => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    log::info!("New version available: {ver}, downloading from {url}");
+    Ok(Some(url))
+}
+
 async fn wifi(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if let Err(secs) = state.rate_limiter.check("wifi") {
@@ -724,14 +546,7 @@ async fn wifi(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
 }
 
 async fn mute(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     crate::commands::audio::mute(&bot, msg.chat.id, msg.id).await?;
@@ -739,14 +554,7 @@ async fn mute(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
 }
 
 async fn unmute(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     crate::commands::audio::unmute(&bot, msg.chat.id, msg.id).await?;
@@ -759,14 +567,7 @@ async fn volume_cmd(
     state: Arc<AgentState>,
     level: String,
 ) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     let level: u8 = match level.trim().parse() {
@@ -781,14 +582,7 @@ async fn volume_cmd(
 }
 
 async fn msgbox_cmd(bot: Bot, msg: Message, state: Arc<AgentState>, text: String) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     if text.trim().is_empty() {
@@ -800,14 +594,7 @@ async fn msgbox_cmd(bot: Bot, msg: Message, state: Arc<AgentState>, text: String
 }
 
 async fn exit_cmd(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !auth::is_authorized(get_user_id(&msg), state.super_user_id) {
-        md::send(
-            &bot,
-            msg.chat.id,
-            msg.id,
-            "⛔ Không có quyền truy cập".to_string(),
-        )
-        .await?;
+    if !ensure_authorized(&bot, &msg, &state).await? {
         return Ok(());
     }
     reply(&bot, &msg, "🚪 Tắt agent\\.\\.\\.").await?;

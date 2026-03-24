@@ -45,7 +45,8 @@ pub async fn sysinfo(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Result<
     let disks = Disks::new_with_refreshed_list();
     for disk in &disks {
         let total = disk.total_space() / 1024 / 1024 / 1024;
-        let used = total - disk.available_space() / 1024 / 1024 / 1024;
+        let avail = disk.available_space() / 1024 / 1024 / 1024;
+        let used = total.saturating_sub(avail);
         let pct = if total > 0 { used * 100 / total } else { 0 };
         text.push_str(&format!(
             "📁 {}:{}/{} GB \\({pct}%\\)\n",
@@ -57,12 +58,9 @@ pub async fn sysinfo(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Result<
 
     let networks = Networks::new_with_refreshed_list();
     for (name, data) in &networks {
-        text.push_str(&format!(
-            "🌐 {}:{} MB {} MB\n",
-            md::escape(name),
-            data.total_received() / 1024 / 1024,
-            data.total_transmitted() / 1024 / 1024,
-        ));
+        let rx = data.total_received() / 1024 / 1024;
+        let tx = data.total_transmitted() / 1024 / 1024;
+        text.push_str(&format!("🌐 {}:{rx} MB {tx} MB\n", md::escape(name),));
     }
 
     md::send(bot, chat_id, reply_to, text).await

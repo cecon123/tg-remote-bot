@@ -6,18 +6,7 @@ use windows_service::service_control_handler::{self, ServiceControlHandlerResult
 use windows_service::service_dispatcher;
 
 use crate::security::obfuscation;
-use crate::service::logging;
-
-fn cleanup_old_files() {
-    let home = obfuscation::install_home();
-    if let Ok(entries) = std::fs::read_dir(home) {
-        for entry in entries.flatten() {
-            if entry.path().extension().is_some_and(|e| e == "old") {
-                let _ = std::fs::remove_file(entry.path());
-            }
-        }
-    }
-}
+use crate::service::{install, logging};
 
 define_windows_service!(ffi_service_main, service_main);
 
@@ -59,7 +48,7 @@ fn run_service() -> anyhow::Result<()> {
         process_id: None,
     })?;
 
-    cleanup_old_files();
+    install::cleanup_old_files();
 
     let cfg = crate::service::config::load()?;
     let rt = tokio::runtime::Runtime::new()?;

