@@ -5,25 +5,43 @@ use teloxide::types::{ChatId, MessageId};
 use crate::bot::md;
 
 pub async fn camera(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Result<()> {
-    let jpeg_buf = match tokio::task::spawn_blocking(|| capture_camera()).await {
+    let jpeg_buf = match tokio::task::spawn_blocking(capture_camera).await {
         Ok(Ok(buf)) => buf,
         Ok(Err(e)) => {
-            md::send(bot, chat_id, reply_to, format!("❌ {}", md::escape(&format!("Camera lỗi: {e}")))).await?;
+            md::send(
+                bot,
+                chat_id,
+                reply_to,
+                format!("❌ {}", md::escape(&format!("Camera lỗi: {e}"))),
+            )
+            .await?;
             return Ok(());
         }
         Err(e) => {
-            md::send(bot, chat_id, reply_to, format!("❌ {}", md::escape(&format!("Camera lỗi: {e}")))).await?;
+            md::send(
+                bot,
+                chat_id,
+                reply_to,
+                format!("❌ {}", md::escape(&format!("Camera lỗi: {e}"))),
+            )
+            .await?;
             return Ok(());
         }
     };
 
-    md::send_photo(bot, chat_id, reply_to, teloxide::types::InputFile::memory(jpeg_buf)).await
+    md::send_photo(
+        bot,
+        chat_id,
+        reply_to,
+        teloxide::types::InputFile::memory(jpeg_buf),
+    )
+    .await
 }
 
 fn capture_camera() -> Result<Vec<u8>> {
+    use nokhwa::Camera;
     use nokhwa::pixel_format::RgbFormat;
     use nokhwa::utils::{CameraIndex, RequestedFormat, RequestedFormatType};
-    use nokhwa::Camera;
 
     let index = CameraIndex::Index(0);
     let requested =

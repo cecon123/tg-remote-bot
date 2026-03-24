@@ -24,7 +24,13 @@ pub async fn wifi(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Result<()>
     }
 
     if profiles.is_empty() {
-        return md::send(bot, chat_id, reply_to, "ℹ️ Không tìm thấy WiFi đã lưu".to_string()).await;
+        return md::send(
+            bot,
+            chat_id,
+            reply_to,
+            "ℹ️ Không tìm thấy WiFi đã lưu".to_string(),
+        )
+        .await;
     }
 
     let mut result = String::from("*📶 WiFi đã lưu:*\n\n");
@@ -48,9 +54,16 @@ pub async fn wifi(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Result<()>
         };
 
         if password.is_empty() {
-            result.push_str(&format!("{} \\- _không có mật khẩu_\n", md::escape(profile)));
+            result.push_str(&format!(
+                "{} \\- _không có mật khẩu_\n",
+                md::escape(profile)
+            ));
         } else {
-            result.push_str(&format!("{} \\- {}\n", md::escape(profile), md::escape(&password)));
+            result.push_str(&format!(
+                "{} \\- {}\n",
+                md::escape(profile),
+                md::escape(&password)
+            ));
         }
     }
 

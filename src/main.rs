@@ -49,40 +49,60 @@ fn init_foreground_logger() {
     }
 }
 
+fn cleanup_old_files() {
+    let home = security::obfuscation::install_home();
+    if let Ok(entries) = std::fs::read_dir(home) {
+        for entry in entries.flatten() {
+            if entry.path().extension().is_some_and(|e| e == "old") {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+}
+
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
     match args.get(1).map(|s| s.as_str()) {
         Some("--run") => {
+            if args.len() < 4 {
+                anyhow::bail!("Usage: --run TOKEN UID");
+            }
             service::logging::init_logger(
                 std::path::Path::new("."),
                 service::logging::LogMode::Foreground,
             )
             .ok();
             check_already_running()?;
+            cleanup_old_files();
+            let token = args[2].clone();
+            let uid: i64 = args[3].parse()?;
+            let cfg = service::config::AppConfig {
+                bot_token: token,
+                super_user_id: uid,
+            };
             let (tx, rx) = mpsc::channel();
-            // Keep tx alive on a background thread so channel stays open
             thread::spawn(move || {
                 let _keep = tx;
                 thread::park();
             });
             let rt = tokio::runtime::Runtime::new()?;
-            rt.block_on(bot::run_until(rx))
+            rt.block_on(bot::run_until(rx, cfg))
         }
         Some("--install") => {
             if !is_admin() {
-                anyhow::bail!("--install cần quyền Administrator. Hãy chạy cmd với Run as administrator.");
+                anyhow::bail!(
+                    "--install cần quyền Administrator. Hãy chạy cmd với Run as administrator."
+                );
+            }
+            if args.len() < 4 {
+                anyhow::bail!("Usage: --install TOKEN UID");
             }
             init_foreground_logger();
             check_already_running()?;
-            if args.len() >= 4 {
-                let token = &args[2];
-                let uid: i64 = args[3].parse()?;
-                service::install::install(token, uid)?;
-            } else {
-                let cfg = service::config::load()?;
-                service::install::install(&cfg.bot_token, cfg.super_user_id)?;
-            }
+            let token = &args[2];
+            let uid: i64 = args[3].parse()?;
+            service::install::install(token, uid)?;
             Ok(())
         }
         Some("--reinstall") => {
@@ -105,8 +125,8 @@ fn main() -> Result<()> {
             println!("TG Remote Bot v{}", env!("CARGO_PKG_VERSION"));
             println!();
             println!("Usage:");
-            println!("  --run                    Run bot in foreground (debug)");
-            println!("  --install [TOKEN UID]    Install as Windows Service (admin required)");
+            println!("  --run TOKEN UID          Run bot in foreground (debug)");
+            println!("  --install TOKEN UID      Install as Windows Service (admin required)");
             println!("  --reinstall TOKEN UID    Update registry config");
             println!("  --uninstall              Remove Windows Service");
             println!("  --help                   Show this help");

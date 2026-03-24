@@ -4,9 +4,14 @@ use anyhow::Result;
 use teloxide::prelude::*;
 use teloxide::types::{ChatId, MessageId};
 
-use crate::bot::{md, AgentState};
+use crate::bot::{AgentState, md};
 
-pub async fn ping(bot: &Bot, chat_id: ChatId, reply_to: MessageId, state: &AgentState) -> Result<()> {
+pub async fn ping(
+    bot: &Bot,
+    chat_id: ChatId,
+    reply_to: MessageId,
+    state: &AgentState,
+) -> Result<()> {
     let ip = local_ip().unwrap_or_else(|| "unknown".to_string());
     let uptime = crate::bot::format_duration(state.start_time.elapsed().as_secs());
 

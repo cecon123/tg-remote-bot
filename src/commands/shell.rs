@@ -6,7 +6,7 @@ use teloxide::types::{ChatId, MessageId};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
-use crate::bot::{md, ActiveJob, RunningJob};
+use crate::bot::{ActiveJob, RunningJob, md};
 
 pub async fn shell(
     bot: &Bot,
@@ -20,7 +20,13 @@ pub async fn shell(
         job.is_some()
     };
     if already_running {
-        md::send(bot, chat_id, reply_to, "⚠️ Job đang chạy\\. Dùng /cancel trước".to_string()).await?;
+        md::send(
+            bot,
+            chat_id,
+            reply_to,
+            "⚠️ Job đang chạy\\. Dùng /cancel trước".to_string(),
+        )
+        .await?;
         return Ok(());
     }
 
@@ -32,13 +38,25 @@ pub async fn shell(
     {
         Ok(c) => c,
         Err(e) => {
-            md::send(bot, chat_id, reply_to, format!("❌ {}", md::escape(&format!("Không thể chạy lệnh: {e}")))).await?;
+            md::send(
+                bot,
+                chat_id,
+                reply_to,
+                format!("❌ {}", md::escape(&format!("Không thể chạy lệnh: {e}"))),
+            )
+            .await?;
             return Ok(());
         }
     };
 
     let pid = child.id().unwrap_or(0);
-    md::send(bot, chat_id, reply_to, format!("▶️ Đang chạy\\.\\.\\. PID: `{pid}`")).await?;
+    md::send(
+        bot,
+        chat_id,
+        reply_to,
+        format!("▶️ Đang chạy\\.\\.\\. PID: `{pid}`"),
+    )
+    .await?;
 
     let bot_clone = bot.clone();
     let chat = chat_id;
@@ -52,7 +70,9 @@ pub async fn shell(
             while let Ok(Some(line)) = reader.next_line().await {
                 output.push_str(&line);
                 output.push('\n');
-                if output.len() > 3800 { break; }
+                if output.len() > 3800 {
+                    break;
+                }
             }
         }
 
@@ -62,15 +82,23 @@ pub async fn shell(
                 output.push_str("ERR: ");
                 output.push_str(&line);
                 output.push('\n');
-                if output.len() > 3800 { break; }
+                if output.len() > 3800 {
+                    break;
+                }
             }
         }
 
         let _ = child.wait().await;
 
-        if output.is_empty() { output = "(no output)".to_string(); }
+        if output.is_empty() {
+            output = "(no output)".to_string();
+        }
         let truncated = crate::bot::truncate_str(&output, 3800);
-        let suffix = if truncated.len() < output.len() { "\n...(truncated)" } else { "" };
+        let suffix = if truncated.len() < output.len() {
+            "\n...(truncated)"
+        } else {
+            ""
+        };
         let escaped = md::escape(&format!("{truncated}{suffix}"));
 
         let _ = md::send(&bot_clone, chat, rto, format!("📤 *Output:*\n\n{escaped}")).await;

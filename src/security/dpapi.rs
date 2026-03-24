@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use base64::Engine;
 use windows_sys::Win32::Foundation::LocalFree;
 use windows_sys::Win32::Security::Cryptography::{
-    CryptProtectData, CryptUnprotectData, CRYPT_INTEGER_BLOB,
+    CRYPT_INTEGER_BLOB, CryptProtectData, CryptUnprotectData,
 };
 
 pub fn protect(data: &[u8]) -> Result<String> {

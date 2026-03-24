@@ -6,7 +6,13 @@ use crate::bot::md;
 
 fn run_powershell_sync(script: &str) -> Result<String> {
     let output = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script])
+        .args([
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            script,
+        ])
         .output()
         .context("cannot run powershell")?;
 
@@ -40,12 +46,7 @@ pub async fn unmute(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Result<(
     md::send(bot, chat_id, reply_to, "🔊 Đã bật âm".to_string()).await
 }
 
-pub async fn set_volume(
-    bot: &Bot,
-    chat_id: ChatId,
-    reply_to: MessageId,
-    level: u8,
-) -> Result<()> {
+pub async fn set_volume(bot: &Bot, chat_id: ChatId, reply_to: MessageId, level: u8) -> Result<()> {
     let level = level.min(100);
     let vol = (level as u32 * 0xFFFF) / 100;
     let packed = (vol << 16) | vol;
@@ -57,11 +58,5 @@ pub async fn set_volume(
         .await?
         .context("cannot set volume")?;
 
-    md::send(
-        bot,
-        chat_id,
-        reply_to,
-        format!("🔊 Âm lượng: {}\\%", level),
-    )
-    .await
+    md::send(bot, chat_id, reply_to, format!("🔊 Âm lượng: {}\\%", level)).await
 }

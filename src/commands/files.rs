@@ -9,7 +9,13 @@ use crate::bot::md;
 pub async fn listfiles(bot: &Bot, chat_id: ChatId, reply_to: MessageId, path: &str) -> Result<()> {
     let dir = Path::new(path);
     if !dir.exists() {
-        md::send(bot, chat_id, reply_to, "❌ Đường dẫn không tồn tại".to_string()).await?;
+        md::send(
+            bot,
+            chat_id,
+            reply_to,
+            "❌ Đường dẫn không tồn tại".to_string(),
+        )
+        .await?;
         return Ok(());
     }
     if !dir.is_dir() {
@@ -18,18 +24,16 @@ pub async fn listfiles(bot: &Bot, chat_id: ChatId, reply_to: MessageId, path: &s
     }
 
     let mut entries = Vec::new();
-    for entry in dir.read_dir().context("cannot read dir")? {
-        if let Ok(e) = entry {
-            let name = e.file_name().to_string_lossy().to_string();
-            let meta = e.metadata().ok();
-            let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
-            let kind = if meta.as_ref().map(|m| m.is_dir()).unwrap_or(false) {
-                "📁"
-            } else {
-                "📄"
-            };
-            entries.push(format!("{kind} {name} ({size} bytes)"));
-        }
+    for e in dir.read_dir().context("cannot read dir")?.flatten() {
+        let name = e.file_name().to_string_lossy().to_string();
+        let meta = e.metadata().ok();
+        let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+        let kind = if meta.as_ref().map(|m| m.is_dir()).unwrap_or(false) {
+            "📁"
+        } else {
+            "📄"
+        };
+        entries.push(format!("{kind} {name} ({size} bytes)"));
     }
 
     if entries.is_empty() {
@@ -37,9 +41,19 @@ pub async fn listfiles(bot: &Bot, chat_id: ChatId, reply_to: MessageId, path: &s
     } else {
         let full = entries.join("\n");
         let truncated = crate::bot::truncate_str(&full, 3800);
-        let suffix = if truncated.len() < full.len() { "\n...(truncated)" } else { "" };
+        let suffix = if truncated.len() < full.len() {
+            "\n...(truncated)"
+        } else {
+            ""
+        };
         let escaped = md::escape(&format!("{truncated}{suffix}"));
-        md::send(bot, chat_id, reply_to, format!("*📂 {}*\n\n{escaped}", md::escape(path))).await?;
+        md::send(
+            bot,
+            chat_id,
+            reply_to,
+            format!("*📂 {}*\n\n{escaped}", md::escape(path)),
+        )
+        .await?;
     }
 
     Ok(())
@@ -53,7 +67,13 @@ pub async fn getfile(bot: &Bot, chat_id: ChatId, reply_to: MessageId, path: &str
     }
 
     if file.metadata()?.len() > 50 * 1024 * 1024 {
-        md::send(bot, chat_id, reply_to, "❌ File quá lớn \\(\\>50MB\\)".to_string()).await?;
+        md::send(
+            bot,
+            chat_id,
+            reply_to,
+            "❌ File quá lớn \\(\\>50MB\\)".to_string(),
+        )
+        .await?;
         return Ok(());
     }
 

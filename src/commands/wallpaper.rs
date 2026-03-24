@@ -9,7 +9,16 @@ pub async fn wallpaper(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Resul
     let key = match hkcu.open_subkey(r"Control Panel\Desktop") {
         Ok(k) => k,
         Err(e) => {
-            md::send(bot, chat_id, reply_to, format!("❌ {}", md::escape(&format!("Không đọc được registry: {e}")))).await?;
+            md::send(
+                bot,
+                chat_id,
+                reply_to,
+                format!(
+                    "❌ {}",
+                    md::escape(&format!("Không đọc được registry: {e}"))
+                ),
+            )
+            .await?;
             return Ok(());
         }
     };
@@ -17,7 +26,16 @@ pub async fn wallpaper(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Resul
     let path: String = match key.get_value("WallPaper") {
         Ok(p) => p,
         Err(e) => {
-            md::send(bot, chat_id, reply_to, format!("❌ {}", md::escape(&format!("Không tìm thấy wallpaper: {e}")))).await?;
+            md::send(
+                bot,
+                chat_id,
+                reply_to,
+                format!(
+                    "❌ {}",
+                    md::escape(&format!("Không tìm thấy wallpaper: {e}"))
+                ),
+            )
+            .await?;
             return Ok(());
         }
     };
@@ -29,7 +47,13 @@ pub async fn wallpaper(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Resul
 
     let file = std::path::Path::new(&path);
     if !file.exists() {
-        md::send(bot, chat_id, reply_to, format!("❌ File không tồn tại: {}", md::escape(&path))).await?;
+        md::send(
+            bot,
+            chat_id,
+            reply_to,
+            format!("❌ File không tồn tại: {}", md::escape(&path)),
+        )
+        .await?;
         return Ok(());
     }
 

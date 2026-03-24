@@ -8,6 +8,17 @@ use windows_service::service_dispatcher;
 use crate::security::obfuscation;
 use crate::service::logging;
 
+fn cleanup_old_files() {
+    let home = obfuscation::install_home();
+    if let Ok(entries) = std::fs::read_dir(home) {
+        for entry in entries.flatten() {
+            if entry.path().extension().is_some_and(|e| e == "old") {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+}
+
 define_windows_service!(ffi_service_main, service_main);
 
 fn service_main(_arguments: Vec<std::ffi::OsString>) {
@@ -48,9 +59,21 @@ fn run_service() -> anyhow::Result<()> {
         process_id: None,
     })?;
 
-    // Run the bot on a new tokio runtime
+    cleanup_old_files();
+
+    let cfg = crate::service::config::load()?;
     let rt = tokio::runtime::Runtime::new()?;
-    rt.block_on(crate::bot::run_until(shutdown_rx))?;
+
+    match rt.block_on(crate::updater::self_update::auto_update()) {
+        Ok(true) => {
+            log::info!("Updated, process exiting for restart");
+            return Ok(());
+        }
+        Err(e) => log::warn!("Auto-update failed: {e:?}"),
+        Ok(false) => {}
+    }
+
+    rt.block_on(crate::bot::run_until(shutdown_rx, cfg))?;
 
     status_handle.set_service_status(ServiceStatus {
         service_type: ServiceType::OWN_PROCESS,

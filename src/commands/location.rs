@@ -15,6 +15,12 @@ pub async fn location(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Result
         .text()
         .await?;
 
-    md::send(bot, chat_id, reply_to, format!("*📍 Vị trí IP:*\n\n{}", md::escape(&resp))).await?;
+    md::send(
+        bot,
+        chat_id,
+        reply_to,
+        format!("*📍 Vị trí IP:*\n\n{}", md::escape(&resp)),
+    )
+    .await?;
     Ok(())
 }

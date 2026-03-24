@@ -2,9 +2,14 @@ use anyhow::Result;
 use teloxide::prelude::*;
 use teloxide::types::{ChatId, MessageId};
 
-use crate::bot::{md, AgentState};
+use crate::bot::{AgentState, md};
 
-pub async fn status(bot: &Bot, chat_id: ChatId, reply_to: MessageId, state: &AgentState) -> Result<()> {
+pub async fn status(
+    bot: &Bot,
+    chat_id: ChatId,
+    reply_to: MessageId,
+    state: &AgentState,
+) -> Result<()> {
     let pid = std::process::id();
     let uptime = crate::bot::format_duration(state.start_time.elapsed().as_secs());
 

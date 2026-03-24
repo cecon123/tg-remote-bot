@@ -12,9 +12,19 @@ pub async fn clipboard(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Resul
         md::send(bot, chat_id, reply_to, "📭 Clipboard trống".to_string()).await?;
     } else {
         let truncated = crate::bot::truncate_str(&text, 3800);
-        let suffix = if truncated.len() < text.len() { "\n...(truncated)" } else { "" };
+        let suffix = if truncated.len() < text.len() {
+            "\n...(truncated)"
+        } else {
+            ""
+        };
         let escaped = md::escape(&format!("{truncated}{suffix}"));
-        md::send(bot, chat_id, reply_to, format!("*📋 Clipboard:*\n\n{escaped}")).await?;
+        md::send(
+            bot,
+            chat_id,
+            reply_to,
+            format!("*📋 Clipboard:*\n\n{escaped}"),
+        )
+        .await?;
     }
 
     Ok(())

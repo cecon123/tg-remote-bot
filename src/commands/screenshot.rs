@@ -32,10 +32,8 @@ fn capture_screen() -> Result<Vec<u8>> {
 
     let rgb = screenshots::image::DynamicImage::ImageRgba8(img).to_rgb8();
     let mut jpeg_buf = Vec::new();
-    let mut encoder = screenshots::image::codecs::jpeg::JpegEncoder::new_with_quality(
-        &mut jpeg_buf,
-        75,
-    );
+    let mut encoder =
+        screenshots::image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg_buf, 75);
     encoder.encode_image(&rgb)?;
 
     Ok(jpeg_buf)

@@ -16,6 +16,7 @@ pub mod router;
 pub type ActiveJob = Arc<Mutex<Option<RunningJob>>>;
 
 pub struct RunningJob {
+    #[allow(dead_code)]
     pub pid: u32,
     pub handle: JoinHandle<()>,
 }
@@ -72,8 +73,7 @@ async fn sleep_with_shutdown(dur: Duration, rx: &Receiver<()>) {
     }
 }
 
-pub async fn run_until(shutdown_rx: Receiver<()>) -> Result<()> {
-    let cfg = config::load()?;
+pub async fn run_until(shutdown_rx: Receiver<()>, cfg: config::AppConfig) -> Result<()> {
     let bot = Bot::new(&cfg.bot_token);
 
     let state = Arc::new(AgentState {
@@ -93,7 +93,10 @@ pub async fn run_until(shutdown_rx: Receiver<()>) -> Result<()> {
             break;
         }
 
-        log::info!("Starting polling (retry delay: {}s)...", retry_delay.as_secs());
+        log::info!(
+            "Starting polling (retry delay: {}s)...",
+            retry_delay.as_secs()
+        );
 
         let listener = teloxide::update_listeners::polling_default(bot.clone()).await;
 

@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Verify tag matches version
+        shell: bash
+        run: |
+          CARGO_VER=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          TAG_VER=${GITHUB_REF_NAME#v}
+          if [ "$CARGO_VER" != "$TAG_VER" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME (v$TAG_VER) does not match Cargo.toml ($CARGO_VER)"
+            exit 1
+          fi
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Rename binary
+        shell: bash
+        run: cp target/release/wininit.exe wininit.exe
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: wininit.exe
+          generate_release_notes: true
+          draft: false

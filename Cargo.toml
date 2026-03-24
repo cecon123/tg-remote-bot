@@ -19,9 +19,9 @@ obfstr = "0.4.4"
 base64 = "0.22.1"
 anyhow = "1.0.102"
 screenshots = "0.8.10"
+serde_json = { version = "1.0.149", default-features = false }
 
 [build-dependencies]
-dotenvy = "0.15"
 winres = "0.1"
 
 [target.'cfg(windows)'.dependencies]
