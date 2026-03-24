@@ -10,7 +10,7 @@ Kiến trúc: **1 máy = 1 bot token**. Super user gửi lệnh từ bất cứ 
 |------|--------|
 | `/ping` | Pong + IP + uptime + version |
 | `/status` | PID + uptime + job status |
-| `/screenshot` | Chụp màn hình → JPEG |
+| `/screenshot` | Chụp màn hình JPEG |
 | `/camera` | Chụp webcam |
 | `/sysinfo` | CPU, RAM, disk, network |
 | `/clipboard` | Đọc clipboard |
@@ -33,7 +33,7 @@ Kiến trúc: **1 máy = 1 bot token**. Super user gửi lệnh từ bất cứ 
 | `/shutdown` | Tắt máy (30s delay) |
 | `/restart` | Khởi động lại (30s delay) |
 | `/abortshutdown` | Hủy lệnh tắt máy |
-| `/update <url>` | Cập nhật agent |
+| `/update [url]` | Cập nhật agent (không URL = auto-check GitHub) |
 | `/uninstall` | Gỡ agent |
 | `/help` | Hiển thị trợ giúp |
 
@@ -46,38 +46,22 @@ Kiến trúc: **1 máy = 1 bot token**. Super user gửi lệnh từ bất cứ 
 - Telegram Bot Token (tạo qua [@BotFather](https://t.me/BotFather))
 - Telegram User ID (lấy qua [@userinfobot](https://t.me/userinfobot))
 
-### Bước 1: Tạo file .env
-
-```env
-TG_BOT_TOKEN=your_bot_token_here
-TG_SUPER_USER_ID=your_telegram_user_id
-```
-
-Hoặc file `.env.example` đã có sẵn, copy và sửa:
+### Build
 
 ```powershell
-copy .env.example .env
-notepad .env
-```
-
-### Bước 2: Build
-
-```powershell
-# Build debug (test nhanh)
+# Build debug
 cargo build
 
-# Build release (deploy)
+# Build release
 cargo build --release
 ```
 
-Config được bake vào binary qua `build.rs` + `dotenvy`. Không cần file .env khi chạy binary đã build.
-
-### Bước 3: Chạy
+### Chạy
 
 #### Mode debug (foreground)
 
 ```powershell
-.\target\debug\tg-remote-bot.exe --run
+cargo run -- --run <BOT_TOKEN> <USER_ID>
 ```
 
 #### Cài Windows Service (production)
@@ -85,26 +69,55 @@ Config được bake vào binary qua `build.rs` + `dotenvy`. Không cần file .
 Mở **Command Prompt** với quyền **Administrator**:
 
 ```powershell
-.\target\release\tg-remote-bot.exe --install
+.\target\release\wininit.exe --install <BOT_TOKEN> <USER_ID>
 ```
 
-Sau đó start service:
+Service tự start (AutoStart). Hoặc khởi động thủ công:
 
 ```powershell
 sc start TgRemoteAgent
 ```
 
-Hoặc reboot → service tự start (AutoStart).
-
 ### CLI Arguments
 
 | Argument | Mô tả |
 |----------|--------|
-| `--run` | Chạy bot foreground (debug/test) |
-| `--install [TOKEN UID]` | Cài Windows Service (cần admin) |
+| `--run TOKEN UID` | Chạy bot foreground (debug/test) |
+| `--install TOKEN UID` | Cài Windows Service (cần admin) |
 | `--reinstall TOKEN UID` | Cập nhật registry config |
 | `--uninstall` | Gỡ Windows Service |
 | `--help` | Hiển thị trợ giúp |
+
+## Auto Update
+
+Agent tự động kiểm tra version từ GitHub khi service start:
+
+1. Fetch `tag_name` từ [GitHub Releases API](https://api.github.com/repos/cecon123/tg-remote-bot/releases/latest)
+2. So sánh với `env!("CARGO_PKG_VERSION")`
+3. Nếu khác → download `wininit.exe` → stop service → swap binary → start service
+
+### Tạo release mới
+
+```bash
+# 1. Bump version trong Cargo.toml
+version = "1.2.0"
+
+# 2. Commit + push
+git add Cargo.toml && git commit -m "bump: 1.2.0" && git push
+
+# 3. Tag + push tag
+git tag v1.2.0 && git push origin v1.2.0
+
+# → GitHub Actions tự build + tạo release v1.2.0 với wininit.exe
+# → Service đang chạy sẽ tự update khi restart
+```
+
+### Manual update từ Telegram
+
+```
+/update                    # Auto-check GitHub, download nếu có version mới
+/update <url>              # Download từ URL cụ thể
+```
 
 ## Kiến trúc
 
@@ -117,13 +130,13 @@ Hoặc reboot → service tự start (AutoStart).
               ▼
 ┌─────────────────────────────────────────┐
 │  Telegram Bot API (Long Polling)        │
-│  getUpdates → dispatch → reply          │
+│  getUpdates dispatch reply              │
 │  Retry loop khi bị terminated           │
 └─────────────┬───────────────────────────┘
               │
               ▼
 ┌─────────────────────────────────────────┐
-│  tg-remote-bot.exe                      │
+│  wininit.exe                            │
 │  ┌───────────────────────────────┐      │
 │  │ Auth: check super_user_id    │      │
 │  │ Rate Limit: token bucket     │      │
@@ -145,13 +158,12 @@ Hoặc reboot → service tự start (AutoStart).
 
 ## Cấu hình
 
-Config được load theo thứ tự ưu tiên:
+Config được lưu trong Windows Registry, mã hóa qua DPAPI:
 
-1. **Env vars** (`TG_BOT_TOKEN`, `TG_SUPER_USER_ID`) — build time
-2. **`.env` file** — build time, qua `dotenvy`
-3. **Hardcoded fallback** trong `build.rs`
+- **Registry path:** `HKCU\SOFTWARE\TgRemoteAgent`
+- **Keys:** `Token` (encrypted), `SuperUserId` (encrypted)
 
-Sau khi build, config được bake vào binary qua `env!("BAKED_TOKEN")`.
+Config được set lần đầu qua `--install TOKEN UID` và có thể cập nhật qua `--reinstall TOKEN UID`.
 
 ## Service Management
 
@@ -166,7 +178,7 @@ sc start TgRemoteAgent
 sc stop TgRemoteAgent
 
 # Gỡ bỏ
-.\tg-remote-bot.exe --uninstall
+.\wininit.exe --uninstall
 ```
 
 Service chạy dưới tài khoản **LocalSystem** (SYSTEM privilege).
@@ -188,6 +200,15 @@ Log format: `[2026-03-22 10:15:30] [INFO ] [module_path] message`
 - **Mutex:** Chỉ 1 instance chạy trên mỗi máy
 - **Obfuscation:** Service name, registry path được obfuscate bằng `obfstr`
 - **Admin check:** `--install` yêu cầu quyền Administrator
+
+## CI/CD
+
+GitHub Actions workflows:
+
+| Workflow | Trigger | Mô tả |
+|----------|---------|--------|
+| `ci.yml` | Push/PR to main | fmt check, clippy, test |
+| `release.yml` | Tag push `v*` | Build release, create GitHub Release with `wininit.exe` |
 
 ## Phát triển
 
@@ -226,7 +247,7 @@ src/
 ├── machine/          # Machine identity (SHA256 hostname+MAC)
 ├── security/         # DPAPI, obfuscation, install_home
 ├── service/          # Windows Service config, install, logging, SCM
-└── updater/          # Self-update (stub)
+└── updater/          # Self-update + auto-update
 ```
 
 ## Dependencies
@@ -240,6 +261,7 @@ src/
 | nokhwa 0.10 | Webcam capture |
 | image 0.25 | Image processing (JPEG) |
 | reqwest 0.13 | HTTP client |
+| serde_json 1.0 | JSON parsing (GitHub API) |
 | clipboard-win 5.4 | Clipboard access |
 | windows-sys 0.61 | Win32 API bindings |
 | windows-service 0.8 | Windows Service management |
@@ -247,7 +269,6 @@ src/
 | obfstr 0.4 | String obfuscation |
 | base64 0.22 | Base64 encoding |
 | sha2 0.10 | SHA256 hashing |
-| dotenvy 0.15 | .env file loading (build-time) |
 | fern 0.7 | File logging with daily rotation |
 | chrono 0.4 | Timestamp for logs |
 

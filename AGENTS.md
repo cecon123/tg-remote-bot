@@ -11,16 +11,12 @@ can send commands from any chat (DM, group).
 - **Runtime:** tokio (full features)
 - **Bot framework:** teloxide 0.17 with macros
 - **Logging:** fern + chrono — daily rotating file logs in `{home}/logs/`
-- **Config:** dotenvy (`.env` file) → baked at compile time via `build.rs`
+- **Config:** DPAPI-encrypted registry (no .env, no baked token)
 - **Error handling:** anyhow
 
 ## Build / Run / Test Commands
 
 ```powershell
-# Config: create .env file
-echo "TG_BOT_TOKEN=your_token" > .env
-echo "TG_SUPER_USER_ID=your_id" >> .env
-
 # Build release
 cargo build --release
 
@@ -28,10 +24,13 @@ cargo build --release
 cargo build
 
 # Run in foreground (debug/test)
-cargo run -- --run
+cargo run -- --run <TOKEN> <UID>
 
 # Install as Windows Service (requires admin)
-cargo run -- --install
+cargo run -- --install <TOKEN> <UID>
+
+# Reinstall (update registry config)
+cargo run -- --reinstall <TOKEN> <UID>
 
 # Uninstall service
 cargo run -- --uninstall
@@ -74,7 +73,7 @@ cargo check
 - `Arc<Mutex<T>>` for shared mutable state (e.g., `ActiveJob`).
 - `Mutex<HashMap<&str, Bucket>>` for rate limiting.
 - Sensitive strings via `obfstr::obfstring!()` in `security/obfuscation.rs`.
-- Config: `.env` file → baked via `dotenvy` in `build.rs` → compiled into binary.
+- Config: CLI args or registry (DPAPI encrypted) — no .env or baked token.
 - Uptime: stored as `Instant` in `AgentState.start_time`, computed via `start_time.elapsed()`.
 - String truncation: use `bot::truncate_str()` which respects UTF-8 char boundaries.
 
@@ -102,7 +101,7 @@ cargo check
 src/
 ├── main.rs           # CLI args, mutex check, admin check, SCM dispatch
 ├── bot/
-│   ├── mod.rs        # AgentState, run_until() with retry loop, truncate_str()
+│   ├── mod.rs        # AgentState, run_until(cfg) with retry loop, truncate_str()
 │   ├── auth.rs       # is_authorized()
 │   ├── md.rs         # MarkdownV2 escape(), send(), send_photo()
 │   ├── router.rs     # Command enum, all handler functions
@@ -134,21 +133,33 @@ src/
 │   └── obfuscation.rs # obfstr! for service name, registry path, install_home
 ├── service/
 │   ├── mod.rs
-│   ├── config.rs     # Baked env → registry fallback
+│   ├── config.rs     # Registry-only config (DPAPI encrypted)
 │   ├── install.rs    # SCM install/uninstall + setup_home_dir()
 │   ├── logging.rs    # DailyFile writer + init_logger()
-│   └── windows_svc.rs # define_windows_service! + SCM dispatch
+│   └── windows_svc.rs # define_windows_service! + SCM dispatch, auto-update on start
 └── updater/
     ├── mod.rs
-    └── self_update.rs # Download → verify → restart (stub)
+    └── self_update.rs # check_remote_version, download, apply_update, auto_update
 ```
+
+### Self-Update System
+- **Auto-update:** On service start, fetches GitHub Releases API, compares `tag_name` with `CARGO_PKG_VERSION`. If different → downloads `wininit.exe` → stops service → swaps binary → starts service → exits.
+- **Manual `/update <url>`:** Downloads binary from user-provided URL, swaps, restarts.
+- **`/update` (no args):** Auto-checks GitHub for new version, downloads if available.
+- **Flow:** `check_remote_version()` → `find_asset_url()` → `download_file()` → `apply_update()`
+- **Swap order:** stop service → rename exe to .old → copy new → start service → `process::exit(0)`
+- **Cleanup:** `.old` files deleted on next startup.
+- **GitHub Release:** Binary must be named `wininit.exe` as release asset.
+- **CI/CD:** `.github/workflows/release.yml` — triggers on `v*` tag push, builds, creates release with `wininit.exe`.
 
 ### Mandatory Rules
 1. Only one instance per machine — enforced via named mutex (`CreateMutexA`).
-2. `/install` requires admin — checked via HKLM write access.
+2. `--install` requires admin — checked via HKLM write access.
 3. Polling retry with exponential backoff on `TerminatedByOtherGetUpdates`.
 4. All commands reply to the specific message via `reply_parameters`.
 5. `AgentState` includes `agent_version = env!("CARGO_PKG_VERSION")` and `start_time: Instant`.
 6. No topic/group constraints — super user can command from anywhere.
 7. Install creates hidden home dir in `%ProgramData%`, copies exe, then registers service.
 8. Log files in `{home}/logs/agent_YYYY-MM-DD.log`, daily rotation via `DailyFile` writer.
+9. Config via CLI args (`--run TOKEN UID`, `--install TOKEN UID`) — no .env, no baked token.
+10. `run_until()` takes `AppConfig` as parameter; service mode loads from registry.
