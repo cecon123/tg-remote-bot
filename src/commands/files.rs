@@ -4,18 +4,15 @@ use anyhow::{Context, Result};
 use teloxide::prelude::*;
 use teloxide::types::{ChatId, InputFile, MessageId};
 
-use crate::bot::md;
+use crate::bot::{md, truncate_and_escape};
+
+/// Max file size for /getfile (50 MB).
+const MAX_GETFILE_BYTES: u64 = 50 * 1024 * 1024;
 
 pub async fn listfiles(bot: &Bot, chat_id: ChatId, reply_to: MessageId, path: &str) -> Result<()> {
     let dir = Path::new(path);
     if !dir.exists() {
-        md::send(
-            bot,
-            chat_id,
-            reply_to,
-            "❌ Đường dẫn không tồn tại".to_string(),
-        )
-        .await?;
+        md::send(bot, chat_id, reply_to, "❌ Đường dẫn không tồn tại".to_string()).await?;
         return Ok(());
     }
     if !dir.is_dir() {
@@ -26,12 +23,12 @@ pub async fn listfiles(bot: &Bot, chat_id: ChatId, reply_to: MessageId, path: &s
     let mut entries = Vec::new();
     for e in dir.read_dir().context("cannot read dir")?.flatten() {
         let name = e.file_name().to_string_lossy().to_string();
-        let meta = e.metadata().ok();
-        let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
-        let kind = if meta.as_ref().map(|m| m.is_dir()).unwrap_or(false) {
-            "📁"
-        } else {
-            "📄"
+        let (kind, size) = match e.metadata() {
+            Ok(m) => {
+                let kind = if m.is_dir() { "📁" } else { "📄" };
+                (kind, m.len())
+            }
+            Err(_) => ("❓", 0),
         };
         entries.push(format!("{kind} {name} ({size} bytes)"));
     }
@@ -39,14 +36,7 @@ pub async fn listfiles(bot: &Bot, chat_id: ChatId, reply_to: MessageId, path: &s
     if entries.is_empty() {
         md::send(bot, chat_id, reply_to, "📭 Thư mục trống".to_string()).await?;
     } else {
-        let full = entries.join("\n");
-        let truncated = crate::bot::truncate_str(&full, 3800);
-        let suffix = if truncated.len() < full.len() {
-            "\n...(truncated)"
-        } else {
-            ""
-        };
-        let escaped = md::escape(&format!("{truncated}{suffix}"));
+        let escaped = truncate_and_escape(&entries.join("\n"), md::MAX_MSG_BYTES);
         md::send(
             bot,
             chat_id,
@@ -66,12 +56,12 @@ pub async fn getfile(bot: &Bot, chat_id: ChatId, reply_to: MessageId, path: &str
         return Ok(());
     }
 
-    if file.metadata()?.len() > 50 * 1024 * 1024 {
+    if file.metadata()?.len() > MAX_GETFILE_BYTES {
         md::send(
             bot,
             chat_id,
             reply_to,
-            "❌ File quá lớn \\(\\>50MB\\)".to_string(),
+            format!("❌ File quá lớn \\(>{}MB\\)", MAX_GETFILE_BYTES / 1024 / 1024),
         )
         .await?;
         return Ok(());
@@ -83,11 +73,5 @@ pub async fn getfile(bot: &Bot, chat_id: ChatId, reply_to: MessageId, path: &str
         .to_string_lossy()
         .to_string();
 
-    bot.send_document(chat_id, InputFile::file(file))
-        .parse_mode(teloxide::types::ParseMode::MarkdownV2)
-        .reply_parameters(teloxide::types::ReplyParameters::new(reply_to))
-        .caption(format!("📄 {}", md::escape(&filename)))
-        .await?;
-
-    Ok(())
+    md::send_document(bot, chat_id, reply_to, InputFile::file(file), format!("📄 {}", md::escape(&filename))).await
 }

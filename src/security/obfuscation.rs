@@ -10,12 +10,6 @@ pub fn registry_path() -> &'static str {
     &S
 }
 
-pub fn service_display() -> &'static str {
-    static S: std::sync::LazyLock<String> =
-        std::sync::LazyLock::new(|| obfstr::obfstring!("Telegram Remote Agent"));
-    &S
-}
-
 pub fn install_home() -> &'static std::path::Path {
     static S: std::sync::LazyLock<std::path::PathBuf> = std::sync::LazyLock::new(|| {
         let program_data =

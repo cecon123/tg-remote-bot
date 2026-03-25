@@ -71,6 +71,8 @@ pub enum Command {
     Volume(String),
     #[command(description = "💬 MessageBox")]
     Msgbox(String),
+    #[command(description = "🛑 Stop daemon")]
+    Stop,
     #[command(description = "🚪 Exit")]
     Exit,
 }
@@ -84,8 +86,8 @@ pub fn schema()
         .branch(case![Command::Ping].endpoint(ping))
         .branch(case![Command::Status].endpoint(status))
         .branch(case![Command::Screenshot].endpoint(screenshot))
-        .branch(case![Command::Shell(cmd)].endpoint(shell))
-        .branch(case![Command::Cancel].endpoint(cancel_cmd))
+        .branch(case![Command::Shell(cmd)].endpoint(shell_cmd))
+        .branch(case![Command::Cancel].endpoint(cancel))
         .branch(case![Command::Sysinfo].endpoint(sysinfo))
         .branch(case![Command::Camera].endpoint(camera))
         .branch(case![Command::Listfiles(path)].endpoint(listfiles))
@@ -100,16 +102,17 @@ pub fn schema()
         .branch(case![Command::Shutdown].endpoint(shutdown))
         .branch(case![Command::Restart].endpoint(restart))
         .branch(case![Command::Abortshutdown].endpoint(abortshutdown))
-        .branch(case![Command::Run(path)].endpoint(run_cmd))
+        .branch(case![Command::Run(path)].endpoint(run_program))
         .branch(case![Command::History].endpoint(history))
         .branch(case![Command::Uninstall].endpoint(uninstall))
         .branch(case![Command::Update(args)].endpoint(update))
         .branch(case![Command::Wifi].endpoint(wifi))
         .branch(case![Command::Mute].endpoint(mute))
         .branch(case![Command::Unmute].endpoint(unmute))
-        .branch(case![Command::Volume(level)].endpoint(volume_cmd))
-        .branch(case![Command::Msgbox(text)].endpoint(msgbox_cmd))
-        .branch(case![Command::Exit].endpoint(exit_cmd));
+        .branch(case![Command::Volume(level)].endpoint(volume))
+        .branch(case![Command::Msgbox(text)].endpoint(msgbox))
+        .branch(case![Command::Stop].endpoint(stop))
+        .branch(case![Command::Exit].endpoint(exit));
 
     Update::filter_message().branch(command_handler)
 }
@@ -118,32 +121,26 @@ fn get_user_id(msg: &Message) -> i64 {
     msg.from.as_ref().map(|u| u.id.0 as i64).unwrap_or(0)
 }
 
-fn reply_params(msg: &Message) -> ReplyParameters {
-    ReplyParameters::new(msg.id)
-}
-
 async fn reply(bot: &Bot, msg: &Message, text: impl Into<String>) -> Result<()> {
-    bot.send_message(msg.chat.id, text.into())
-        .parse_mode(ParseMode::MarkdownV2)
-        .reply_parameters(reply_params(msg))
-        .await?;
-    Ok(())
-}
-
-async fn reply_escaped(bot: &Bot, msg: &Message, text: impl Into<String>) -> Result<()> {
     bot.send_message(msg.chat.id, md::escape(&text.into()))
         .parse_mode(ParseMode::MarkdownV2)
-        .reply_parameters(reply_params(msg))
+        .reply_parameters(ReplyParameters::new(msg.id))
         .await?;
     Ok(())
 }
 
+/// Check authorization; sends access denied message and returns false if unauthorized.
 async fn ensure_authorized(bot: &Bot, msg: &Message, state: &AgentState) -> Result<bool> {
     if !auth::is_authorized(get_user_id(msg), state.super_user_id) {
         md::send(bot, msg.chat.id, msg.id, ACCESS_DENIED.to_string()).await?;
         return Ok(false);
     }
     Ok(true)
+}
+
+/// Check rate limit; sends cooldown message and returns false if limited.
+fn check_rate_limit(state: &AgentState, command: &str) -> Result<(), String> {
+    state.rate_limiter.check(command).map_err(|secs| format!("⏳ Cooldown {secs}s"))
 }
 
 fn help_text() -> String {
@@ -184,66 +181,53 @@ fn help_text() -> String {
     t.push_str("/history \\- Lịch sử\n");
     t.push_str("/uninstall \\- Gỡ agent\n");
     t.push_str("/update _\\[url\\]_ \\- Cập nhật từ URL hoặc GitHub\n");
+    t.push_str("/stop \\- Dừng daemon \\(Task Scheduler\\)\n");
     t.push_str("/exit \\- Tắt agent\n");
     t
 }
 
+// ─── Command Handlers ───────────────────────────────────────────────────────
+
 async fn help(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
     reply(&bot, &msg, help_text()).await?;
     Ok(())
 }
 
 async fn ping(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
+    if let Err(e) = check_rate_limit(&state, "ping") { reply(&bot, &msg, e).await?; return Ok(()); }
     crate::commands::ping::ping(&bot, msg.chat.id, msg.id, &state).await?;
     Ok(())
 }
 
 async fn status(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
+    if let Err(e) = check_rate_limit(&state, "status") { reply(&bot, &msg, e).await?; return Ok(()); }
     crate::commands::status::status(&bot, msg.chat.id, msg.id, &state).await?;
     Ok(())
 }
 
 async fn screenshot(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
-    if let Err(secs) = state.rate_limiter.check("screenshot") {
-        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
+    if let Err(e) = check_rate_limit(&state, "screenshot") { reply(&bot, &msg, e).await?; return Ok(()); }
     crate::commands::screenshot::screenshot(&bot, msg.chat.id, msg.id).await?;
     Ok(())
 }
 
-async fn shell(bot: Bot, msg: Message, state: Arc<AgentState>, cmd: String) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
+async fn shell_cmd(bot: Bot, msg: Message, state: Arc<AgentState>, cmd: String) -> HandlerResult {
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
     if cmd.trim().is_empty() {
         reply(&bot, &msg, "⚠️ Cú pháp: /shell _\\<lệnh\\_>").await?;
         return Ok(());
     }
-    if let Err(secs) = state.rate_limiter.check("shell") {
-        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
-        return Ok(());
-    }
+    if let Err(e) = check_rate_limit(&state, "shell") { reply(&bot, &msg, e).await?; return Ok(()); }
     crate::commands::shell::shell(&bot, msg.chat.id, msg.id, &state.active_job, &cmd).await?;
     Ok(())
 }
 
-async fn cancel_cmd(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
+async fn cancel(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
     let handle = {
         let mut job = state.active_job.lock().unwrap_or_else(|e| e.into_inner());
         job.take().map(|r| r.handle)
@@ -258,85 +242,55 @@ async fn cancel_cmd(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerRe
 }
 
 async fn sysinfo(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
-    if let Err(secs) = state.rate_limiter.check("sysinfo") {
-        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
+    if let Err(e) = check_rate_limit(&state, "sysinfo") { reply(&bot, &msg, e).await?; return Ok(()); }
     crate::commands::sysinfo::sysinfo(&bot, msg.chat.id, msg.id).await?;
     Ok(())
 }
 
 async fn camera(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
-    if let Err(secs) = state.rate_limiter.check("camera") {
-        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
+    if let Err(e) = check_rate_limit(&state, "camera") { reply(&bot, &msg, e).await?; return Ok(()); }
     crate::commands::camera::camera(&bot, msg.chat.id, msg.id).await?;
     Ok(())
 }
 
 async fn listfiles(bot: Bot, msg: Message, state: Arc<AgentState>, path: String) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
     if path.trim().is_empty() {
         reply(&bot, &msg, "⚠️ Cú pháp: /listfiles _\\<path\\_>").await?;
         return Ok(());
     }
-    if let Err(secs) = state.rate_limiter.check("listfiles") {
-        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
-        return Ok(());
-    }
+    if let Err(e) = check_rate_limit(&state, "listfiles") { reply(&bot, &msg, e).await?; return Ok(()); }
     crate::commands::files::listfiles(&bot, msg.chat.id, msg.id, &path).await?;
     Ok(())
 }
 
 async fn getfile(bot: Bot, msg: Message, state: Arc<AgentState>, path: String) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
     if path.trim().is_empty() {
         reply(&bot, &msg, "⚠️ Cú pháp: /getfile _\\<path\\_>").await?;
         return Ok(());
     }
-    if let Err(secs) = state.rate_limiter.check("getfile") {
-        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
-        return Ok(());
-    }
+    if let Err(e) = check_rate_limit(&state, "getfile") { reply(&bot, &msg, e).await?; return Ok(()); }
     crate::commands::files::getfile(&bot, msg.chat.id, msg.id, &path).await?;
     Ok(())
 }
 
 async fn procs(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
-    if let Err(secs) = state.rate_limiter.check("procs") {
-        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
+    if let Err(e) = check_rate_limit(&state, "procs") { reply(&bot, &msg, e).await?; return Ok(()); }
     crate::commands::procs::procs(&bot, msg.chat.id, msg.id).await?;
     Ok(())
 }
 
 async fn kill(bot: Bot, msg: Message, state: Arc<AgentState>, pid: String) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
     if pid.trim().is_empty() {
         reply(&bot, &msg, "⚠️ Cú pháp: /kill _\\<pid\\_>").await?;
         return Ok(());
     }
-    if let Err(secs) = state.rate_limiter.check("kill") {
-        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
-        return Ok(());
-    }
+    if let Err(e) = check_rate_limit(&state, "kill") { reply(&bot, &msg, e).await?; return Ok(()); }
     let pid: u32 = match pid.trim().parse() {
         Ok(p) => p,
         Err(_) => {
@@ -349,163 +303,102 @@ async fn kill(bot: Bot, msg: Message, state: Arc<AgentState>, pid: String) -> Ha
 }
 
 async fn netstat(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
-    if let Err(secs) = state.rate_limiter.check("netstat") {
-        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
+    if let Err(e) = check_rate_limit(&state, "netstat") { reply(&bot, &msg, e).await?; return Ok(()); }
     crate::commands::network::netstat(&bot, msg.chat.id, msg.id).await?;
     Ok(())
 }
 
 async fn clipboard(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
-    if let Err(secs) = state.rate_limiter.check("clipboard") {
-        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
+    if let Err(e) = check_rate_limit(&state, "clipboard") { reply(&bot, &msg, e).await?; return Ok(()); }
     crate::commands::clipboard::clipboard(&bot, msg.chat.id, msg.id).await?;
     Ok(())
 }
 
 async fn location(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
-    if let Err(secs) = state.rate_limiter.check("location") {
-        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
+    if let Err(e) = check_rate_limit(&state, "location") { reply(&bot, &msg, e).await?; return Ok(()); }
     crate::commands::location::location(&bot, msg.chat.id, msg.id).await?;
     Ok(())
 }
 
 async fn wallpaper(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
-    if let Err(secs) = state.rate_limiter.check("wallpaper") {
-        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
+    if let Err(e) = check_rate_limit(&state, "wallpaper") { reply(&bot, &msg, e).await?; return Ok(()); }
     crate::commands::wallpaper::wallpaper(&bot, msg.chat.id, msg.id).await?;
     Ok(())
 }
 
 async fn lock(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
-    if let Err(secs) = state.rate_limiter.check("lock") {
-        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
+    if let Err(e) = check_rate_limit(&state, "lock") { reply(&bot, &msg, e).await?; return Ok(()); }
     crate::commands::system::lock_screen(&bot, msg.chat.id, msg.id).await?;
     Ok(())
 }
 
 async fn shutdown(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
-    if let Err(secs) = state.rate_limiter.check("shutdown") {
-        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
+    if let Err(e) = check_rate_limit(&state, "shutdown") { reply(&bot, &msg, e).await?; return Ok(()); }
     crate::commands::system::shutdown(&bot, msg.chat.id, msg.id).await?;
     Ok(())
 }
 
 async fn restart(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
-    if let Err(secs) = state.rate_limiter.check("restart") {
-        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
+    if let Err(e) = check_rate_limit(&state, "restart") { reply(&bot, &msg, e).await?; return Ok(()); }
     crate::commands::system::restart(&bot, msg.chat.id, msg.id).await?;
     Ok(())
 }
 
 async fn abortshutdown(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
-    if let Err(secs) = state.rate_limiter.check("abortshutdown") {
-        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
+    if let Err(e) = check_rate_limit(&state, "abortshutdown") { reply(&bot, &msg, e).await?; return Ok(()); }
     crate::commands::system::abort_shutdown(&bot, msg.chat.id, msg.id).await?;
     Ok(())
 }
 
-async fn run_cmd(bot: Bot, msg: Message, state: Arc<AgentState>, path: String) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
+async fn run_program(bot: Bot, msg: Message, state: Arc<AgentState>, path: String) -> HandlerResult {
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
     if path.trim().is_empty() {
         reply(&bot, &msg, "⚠️ Cú pháp: /run _\\<path\\_>").await?;
         return Ok(());
     }
-    if let Err(secs) = state.rate_limiter.check("run") {
-        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
-        return Ok(());
-    }
+    if let Err(e) = check_rate_limit(&state, "run") { reply(&bot, &msg, e).await?; return Ok(()); }
     crate::commands::system::run_program(&bot, msg.chat.id, msg.id, &path).await?;
     Ok(())
 }
 
 async fn history(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
-    if let Err(secs) = state.rate_limiter.check("history") {
-        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
+    if let Err(e) = check_rate_limit(&state, "history") { reply(&bot, &msg, e).await?; return Ok(()); }
     reply(&bot, &msg, "ℹ️ History chưa được implement").await?;
     Ok(())
 }
 
 async fn uninstall(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
     match crate::service::install::uninstall() {
-        Ok(_) => {
-            reply(&bot, &msg, "✅ Agent đã gỡ bỏ").await?;
-        }
-        Err(e) => {
-            reply_escaped(&bot, &msg, format!("❌ Gỡ bỏ thất bại: {e}")).await?;
-        }
+        Ok(_) => reply(&bot, &msg, "✅ Agent đã gỡ bỏ").await?,
+        Err(e) => reply(&bot, &msg, format!("❌ Gỡ bỏ thất bại: {e}")).await?,
     }
     Ok(())
 }
 
 async fn update(bot: Bot, msg: Message, state: Arc<AgentState>, args: String) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
-    if let Err(secs) = state.rate_limiter.check("update") {
-        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
+    if let Err(e) = check_rate_limit(&state, "update") { reply(&bot, &msg, e).await?; return Ok(()); }
 
     let url = if args.trim().is_empty() {
         reply(&bot, &msg, "🔍 Đang kiểm tra version từ GitHub\\.\\.\\.").await?;
-        match fetch_github_update_url().await {
+        match crate::updater::self_update::resolve_update_url().await {
             Ok(Some(url)) => url,
             Ok(None) => {
                 reply(&bot, &msg, "✅ Đang dùng version mới nhất").await?;
                 return Ok(());
             }
             Err(e) => {
-                reply_escaped(&bot, &msg, format!("❌ Không check được version: {e}")).await?;
+                reply(&bot, &msg, format!("❌ Không check được version: {e}")).await?;
                 return Ok(());
             }
         }
@@ -515,61 +408,32 @@ async fn update(bot: Bot, msg: Message, state: Arc<AgentState>, args: String) ->
 
     reply(&bot, &msg, "⬇️ Đang tải về và cập nhật\\.\\.\\.").await?;
     if let Err(e) = crate::updater::self_update::self_update(&url).await {
-        reply_escaped(&bot, &msg, format!("❌ Cập nhật thất bại: {e}")).await?;
+        reply(&bot, &msg, format!("❌ Cập nhật thất bại: {e}")).await?;
     }
     Ok(())
 }
 
-async fn fetch_github_update_url() -> Result<Option<String>> {
-    let (ver, url) = match crate::updater::self_update::check_remote_version().await {
-        Ok(Some(ver)) => {
-            let url = crate::updater::self_update::find_asset_url().await?;
-            (ver, url)
-        }
-        Ok(None) => return Ok(None),
-        Err(e) => return Err(e),
-    };
-    log::info!("New version available: {ver}, downloading from {url}");
-    Ok(Some(url))
-}
-
 async fn wifi(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
-    if let Err(secs) = state.rate_limiter.check("wifi") {
-        reply(&bot, &msg, format!("⏳ Cooldown {secs}s")).await?;
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
+    if let Err(e) = check_rate_limit(&state, "wifi") { reply(&bot, &msg, e).await?; return Ok(()); }
     crate::commands::wifi::wifi(&bot, msg.chat.id, msg.id).await?;
     Ok(())
 }
 
 async fn mute(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
     crate::commands::audio::mute(&bot, msg.chat.id, msg.id).await?;
     Ok(())
 }
 
 async fn unmute(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
     crate::commands::audio::unmute(&bot, msg.chat.id, msg.id).await?;
     Ok(())
 }
 
-async fn volume_cmd(
-    bot: Bot,
-    msg: Message,
-    state: Arc<AgentState>,
-    level: String,
-) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
+async fn volume(bot: Bot, msg: Message, state: Arc<AgentState>, level: String) -> HandlerResult {
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
     let level: u8 = match level.trim().parse() {
         Ok(v) => v,
         Err(_) => {
@@ -581,10 +445,8 @@ async fn volume_cmd(
     Ok(())
 }
 
-async fn msgbox_cmd(bot: Bot, msg: Message, state: Arc<AgentState>, text: String) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
-    }
+async fn msgbox(bot: Bot, msg: Message, state: Arc<AgentState>, text: String) -> HandlerResult {
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
     if text.trim().is_empty() {
         reply(&bot, &msg, "⚠️ Cú pháp: /msgbox _\\<text\\>_").await?;
         return Ok(());
@@ -593,10 +455,17 @@ async fn msgbox_cmd(bot: Bot, msg: Message, state: Arc<AgentState>, text: String
     Ok(())
 }
 
-async fn exit_cmd(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
-    if !ensure_authorized(&bot, &msg, &state).await? {
-        return Ok(());
+async fn stop(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
+    reply(&bot, &msg, "🛑 Đang dừng daemon\\.\\.\\.").await?;
+    if let Err(e) = crate::service::scheduler::stop() {
+        reply(&bot, &msg, format!("❌ Stop failed: {e}")).await?;
     }
+    Ok(())
+}
+
+async fn exit(bot: Bot, msg: Message, state: Arc<AgentState>) -> HandlerResult {
+    if !ensure_authorized(&bot, &msg, &state).await? { return Ok(()); }
     reply(&bot, &msg, "🚪 Tắt agent\\.\\.\\.").await?;
     std::process::exit(0);
 }

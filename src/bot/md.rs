@@ -1,6 +1,10 @@
 use teloxide::prelude::*;
 use teloxide::types::{ChatId, InputFile, MessageId, ParseMode, ReplyParameters};
 
+/// Max byte length for Telegram messages to avoid truncation at API level.
+pub const MAX_MSG_BYTES: usize = 3800;
+
+/// Telegram MarkdownV2 special characters that require escaping.
 pub fn escape(text: &str) -> String {
     let mut out = String::with_capacity(text.len() + 10);
     for ch in text.chars() {
@@ -16,6 +20,7 @@ pub fn escape(text: &str) -> String {
     out
 }
 
+/// Send a MarkdownV2 message, replying to the given message.
 pub async fn send(
     bot: &Bot,
     chat_id: ChatId,
@@ -29,6 +34,18 @@ pub async fn send(
     Ok(())
 }
 
+/// Reply with an error message. Automatically escapes dynamic content.
+pub async fn reply_error(
+    bot: &Bot,
+    chat_id: ChatId,
+    reply_to: MessageId,
+    label: &str,
+    err: impl std::fmt::Display,
+) -> anyhow::Result<()> {
+    send(bot, chat_id, reply_to, format!("❌ {}", escape(&format!("{label}: {err}")))).await
+}
+
+/// Send a photo, replying to the given message.
 pub async fn send_photo(
     bot: &Bot,
     chat_id: ChatId,
@@ -41,7 +58,7 @@ pub async fn send_photo(
     Ok(())
 }
 
-#[allow(dead_code)]
+/// Send a document with MarkdownV2 caption, replying to the given message.
 pub async fn send_document(
     bot: &Bot,
     chat_id: ChatId,

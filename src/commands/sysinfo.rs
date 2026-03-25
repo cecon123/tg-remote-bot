@@ -6,8 +6,7 @@ use teloxide::types::{ChatId, MessageId};
 use crate::bot::md;
 
 pub async fn sysinfo(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Result<()> {
-    let mut sys = System::new_all();
-    sys.refresh_all();
+    let sys = System::new_all();
 
     let os = System::long_os_version().unwrap_or_default();
     let kernel = System::kernel_version().unwrap_or_default();
@@ -20,11 +19,7 @@ pub async fn sysinfo(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Result<
         .unwrap_or_default();
     let mem_total = sys.total_memory() / 1024 / 1024;
     let mem_used = sys.used_memory() / 1024 / 1024;
-    let mem_pct = if mem_total > 0 {
-        mem_used * 100 / mem_total
-    } else {
-        0
-    };
+    let mem_pct = if mem_total > 0 { mem_used * 100 / mem_total } else { 0 };
     let swap_total = sys.total_swap() / 1024 / 1024;
     let swap_used = sys.used_swap() / 1024 / 1024;
 
@@ -42,25 +37,21 @@ pub async fn sysinfo(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Result<
         md::escape(&cpu_brand),
     );
 
-    let disks = Disks::new_with_refreshed_list();
-    for disk in &disks {
+    for disk in &Disks::new_with_refreshed_list() {
         let total = disk.total_space() / 1024 / 1024 / 1024;
         let avail = disk.available_space() / 1024 / 1024 / 1024;
         let used = total.saturating_sub(avail);
         let pct = if total > 0 { used * 100 / total } else { 0 };
         text.push_str(&format!(
-            "📁 {}:{}/{} GB \\({pct}%\\)\n",
+            "📁 {}:{used}/{total} GB \\({pct}%\\)\n",
             md::escape(&disk.mount_point().display().to_string()),
-            used,
-            total,
         ));
     }
 
-    let networks = Networks::new_with_refreshed_list();
-    for (name, data) in &networks {
+    for (name, data) in &Networks::new_with_refreshed_list() {
         let rx = data.total_received() / 1024 / 1024;
         let tx = data.total_transmitted() / 1024 / 1024;
-        text.push_str(&format!("🌐 {}:{rx} MB {tx} MB\n", md::escape(name),));
+        text.push_str(&format!("🌐 {}:{rx} MB {tx} MB\n", md::escape(name)));
     }
 
     md::send(bot, chat_id, reply_to, text).await

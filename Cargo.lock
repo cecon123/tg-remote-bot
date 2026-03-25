@@ -4295,17 +4295,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "windows-service"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "193cae8e647981c35bc947fdd57ba7928b1fa0d4a79305f6dd2dc55221ac35ac"
-dependencies = [
- "bitflags 2.11.0",
- "widestring",
- "windows-sys 0.59.0",
-]
-
-[[package]]
 name = "windows-strings"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4548,7 +4537,7 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "wininit"
-version = "1.2.0"
+version = "1.3.0"
 dependencies = [
  "anyhow",
  "base64",
@@ -4567,7 +4556,6 @@ dependencies = [
  "sysinfo",
  "teloxide",
  "tokio",
- "windows-service",
  "windows-sys 0.61.2",
  "winreg",
  "winres",

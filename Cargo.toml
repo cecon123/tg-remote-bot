@@ -1,6 +1,6 @@
 [package]
 name = "wininit"
-version = "1.2.0"
+version = "1.3.0"
 edition = "2024"
 
 [dependencies]
@@ -25,13 +25,11 @@ serde_json = { version = "1.0.149", default-features = false }
 winres = "0.1"
 
 [target.'cfg(windows)'.dependencies]
-windows-service = "0.8"
 winreg = "0.56"
 clipboard-win = "5.4.1"
 windows-sys = { version = "0.61.2", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_Storage_FileSystem",
-    "Win32_System_Services",
     "Win32_Security_Cryptography",
     "Win32_Foundation",
     "Win32_System_Threading",

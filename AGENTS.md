@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-A Windows remote-control agent that runs as a Windows Service and is controlled
+A Windows remote-control agent that runs via Task Scheduler and is controlled
 via Telegram Bot API using long polling. One machine = one bot token. Super user
 can send commands from any chat (DM, group).
 
@@ -26,13 +26,16 @@ cargo build
 # Run in foreground (debug/test)
 cargo run -- --run <TOKEN> <UID>
 
-# Install as Windows Service (requires admin)
+# Run as daemon (Task Scheduler mode)
+cargo run -- --daemon
+
+# Install via Task Scheduler (requires admin)
 cargo run -- --install <TOKEN> <UID>
 
 # Reinstall (update registry config)
 cargo run -- --reinstall <TOKEN> <UID>
 
-# Uninstall service
+# Uninstall Task Scheduler task
 cargo run -- --uninstall
 
 # Lint
@@ -65,7 +68,7 @@ cargo check
 - Modules: `snake_case` (e.g., `rate_limit.rs`)
 - Types: `PascalCase` (e.g., `AgentState`, `RunningJob`)
 - Functions/vars: `snake_case` (e.g., `is_authorized`, `truncate_str`)
-- Constants: `SCREAMING_SNAKE_CASE` (e.g., `MUTEX_NAME`)
+- Constants: `SCREAMING_SNAKE_CASE` (e.g., `MAX_MSG_BYTES`)
 - Telegram commands: match command name (e.g., `fn screenshot()`, `fn sysinfo()`)
 
 ### Types & Patterns
@@ -76,11 +79,13 @@ cargo check
 - Config: CLI args or registry (DPAPI encrypted) — no .env or baked token.
 - Uptime: stored as `Instant` in `AgentState.start_time`, computed via `start_time.elapsed()`.
 - String truncation: use `bot::truncate_str()` which respects UTF-8 char boundaries.
+- Truncate + escape combo: use `bot::truncate_and_escape(text, md::MAX_MSG_BYTES)`.
 
 ### MarkdownV2
 - All messages use `ParseMode::MarkdownV2` via `md::send()`.
 - All dynamic content MUST be escaped via `md::escape()`.
 - Static content must have `.` `,` `(` `)` `!` `+` `-` escaped with `\`.
+- Error replies: use `md::reply_error(bot, chat_id, reply_to, "Label", err)`.
 
 ### Formatting
 - No `.rustfmt.toml` — use defaults (4-space indent, 100 char width).
@@ -95,68 +100,63 @@ cargo check
 ### Async / Concurrency
 - `tokio::spawn` for detached tasks; `JoinHandle` stored in `ActiveJob` for `/cancel`.
 - Mutex lock must NOT be held across `.await` — extract value first, drop guard, then await.
-- Shell output truncated at 3800 bytes via `truncate_str()`.
+- Shell output truncated at `md::MAX_MSG_BYTES` (3800) via `truncate_str()`.
 - Read stdout/stderr concurrently via separate `tokio::spawn` tasks to avoid pipe deadlock.
+- CPU/GPU-bound operations (screen capture, camera) must use `tokio::task::spawn_blocking`.
 
-### Session Management (machine/session.rs)
-- `run_in_user_session(exe, args, wait_ms)` — spawns process as active user via `CreateProcessAsUserW`.
-- `capture_in_user_session(exe, args, wait_ms)` — same but captures stdout via pipe.
-- `is_system_session()` — returns `true` when no active console session (`WTSGetActiveConsoleSessionId() == u32::MAX`).
-- Function signatures take `Vec<String>` for args (owned, required for `spawn_blocking` `'static` bound).
+### Task Scheduler
+- Task runs as current user (not SYSTEM) via `/ru <USERNAME>` with `/rl highest`.
+- Trigger: `/sc onlogon` — runs when user logs in.
+- Because process runs in user session, all desktop commands work directly (no delegation needed).
 
 ### Project Structure
 ```
 src/
-├── main.rs           # CLI args, mutex check, admin check, SCM dispatch
+├── main.rs           # CLI args, mutex check, admin check, daemon mode
 ├── bot/
-│   ├── mod.rs        # AgentState, run_until(cfg) with retry loop, truncate_str()
+│   ├── mod.rs        # AgentState, run_until(cfg, ctrlc) with retry loop
+│   │                 # truncate_str(), truncate_and_escape(), format_duration()
 │   ├── auth.rs       # is_authorized()
-│   ├── md.rs         # MarkdownV2 escape(), send(), send_photo()
-│   ├── router.rs     # Command enum, handler functions, ensure_authorized()
+│   ├── md.rs         # MarkdownV2 escape(), send(), send_photo(), send_document(),
+│   │                 # reply_error(), MAX_MSG_BYTES constant
+│   ├── router.rs     # Command enum, handler functions, ensure_authorized(),
+│   │                 # check_rate_limit(), help_text()
 │   └── rate_limit.rs # Token bucket per-command rate limiter
 ├── commands/
 │   ├── ping.rs       # PONG + IP + uptime + version
 │   ├── status.rs     # PID + uptime + job status
-│   ├── screenshot.rs # Screen capture → JPEG
+│   ├── screenshot.rs # Screen capture → JPEG (spawn_blocking)
 │   ├── shell.rs      # cmd /C execution + /cancel (concurrent stdout/stderr read)
 │   ├── sysinfo.rs    # CPU, RAM, disks, network (saturating_sub for disk calc)
 │   ├── system.rs     # lock, shutdown, restart, abort, run (shared run_shutdown_cmd)
-│   ├── files.rs      # listfiles, getfile
-│   ├── procs.rs      # procs, kill
+│   ├── files.rs      # listfiles, getfile (MAX_GETFILE_BYTES = 50MB)
+│   ├── procs.rs      # procs, kill (let-else pattern, MAX_PROCS constant)
 │   ├── network.rs    # netstat (interface list)
-│   ├── clipboard.rs  # Read clipboard
+│   ├── clipboard.rs  # Read clipboard (truncate_and_escape)
 │   ├── location.rs   # IP geolocation (HTTPS, formatted JSON response)
-│   ├── camera.rs     # Webcam capture
-│   ├── wallpaper.rs  # Get desktop wallpaper
-│   ├── wifi.rs       # Saved WiFi profiles + passwords (split_once for parsing)
-│   ├── audio.rs      # mute, unmute, volume (run_powershell helper)
-│   ├── msgbox.rs     # MessageBox Win32 (blocking)
-│   └── notify.rs     # Login watcher (stub)
-├── machine/
-│   ├── mod.rs
-│   ├── identity.rs   # SHA256(hostname+MAC) machine ID (unused currently)
-│   └── session.rs    # User session process spawning (CreateProcessAsUserW)
+│   ├── camera.rs     # Webcam capture (spawn_blocking)
+│   ├── wallpaper.rs  # Get desktop wallpaper (md::send_document)
+│   ├── wifi.rs       # Saved WiFi profiles + passwords (parse_profile_name helper)
+│   ├── audio.rs      # mute, unmute, volume (Core Audio API via PowerShell)
+│   └── msgbox.rs     # MessageBox Win32 (blocking, spawn_blocking)
 ├── security/
-│   ├── mod.rs
 │   ├── dpapi.rs      # CryptProtectData / CryptUnprotectData
 │   └── obfuscation.rs # obfstr! for service name, registry path, install_home
 ├── service/
-│   ├── mod.rs
 │   ├── config.rs     # Registry-only config (DPAPI encrypted)
-│   ├── install.rs    # SCM install/uninstall + setup_home_dir() + cleanup_old_files()
+│   ├── install.rs    # Task Scheduler install/uninstall + setup_home_dir() + cleanup_old_files()
 │   ├── logging.rs    # DailyFile writer + init_logger()
-│   └── windows_svc.rs # define_windows_service! + SCM dispatch, auto-update on start
+│   └── scheduler.rs  # schtasks.exe wrappers (install/uninstall/stop)
 └── updater/
-    ├── mod.rs
-    └── self_update.rs # check_remote_version, download, apply_update, auto_update
+    └── self_update.rs # resolve_update_url(), download, apply_update, auto_update
 ```
 
 ### Self-Update System
-- **Auto-update:** On service start, fetches GitHub Releases API, compares `tag_name` with `CARGO_PKG_VERSION`. If different → downloads `wininit.exe` → stops service → swaps binary → starts service → exits.
-- **Manual `/update <url>`:** Downloads binary from user-provided URL, swaps, restarts.
-- **`/update` (no args):** Auto-checks GitHub for new version, downloads if available.
-- **Flow:** `check_remote_version()` → `find_asset_url()` → `download_file()` → `apply_update()`
-- **Swap order:** stop service → rename exe to .old → copy new → start service → `process::exit(0)`
+- **Auto-update:** On daemon start, fetches GitHub Releases API, compares `tag_name` with `CARGO_PKG_VERSION` (semver). If newer → downloads `wininit.exe` → swaps binary → exits. Task Scheduler restarts automatically.
+- **Manual `/update <url>`:** Downloads binary from user-provided URL, swaps, exits.
+- **`/update` (no args):** Uses `resolve_update_url()` to auto-check GitHub, downloads if available.
+- **Flow:** `resolve_update_url()` → `find_asset_url()` → `download_file()` → `apply_update()`
+- **Swap order:** rename exe to .old → copy new → `process::exit(0)`
 - **Cleanup:** `.old` files deleted on next startup via `cleanup_old_files()` in `service::install`.
 - **GitHub Release:** Binary must be named `wininit.exe` as release asset.
 - **CI/CD:** `.github/workflows/release.yml` — triggers on `v*` tag push, builds, creates release with `wininit.exe`.
@@ -173,9 +173,9 @@ src/
 4. All commands reply to the specific message via `reply_parameters`.
 5. `AgentState` includes `agent_version = env!("CARGO_PKG_VERSION")` and `start_time: Instant`.
 6. No topic/group constraints — super user can command from anywhere.
-7. Install creates hidden home dir in `%ProgramData%`, copies exe, then registers service.
+7. Install creates hidden home dir in `%ProgramData%`, copies exe, then registers Task Scheduler task.
 8. Log files in `{home}/logs/agent_YYYY-MM-DD.log`, daily rotation via `DailyFile` writer.
 9. Config via CLI args (`--run TOKEN UID`, `--install TOKEN UID`) — no .env, no baked token.
-10. `run_until()` takes `AppConfig` as parameter; service mode loads from registry.
+10. `run_until()` takes `AppConfig` and `enable_ctrlc` as parameters; daemon mode loads from registry.
 11. Auth check uses `ensure_authorized()` helper in `router.rs` — do not duplicate auth logic.
 12. All commands that could be abused have rate limits in `rate_limit.rs`.

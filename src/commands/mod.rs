@@ -5,7 +5,6 @@ pub mod files;
 pub mod location;
 pub mod msgbox;
 pub mod network;
-pub mod notify;
 pub mod ping;
 pub mod procs;
 pub mod screenshot;

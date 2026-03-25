@@ -29,6 +29,7 @@ pub struct AgentState {
     pub start_time: Instant,
 }
 
+/// Format a duration in seconds to a human-readable string (e.g., "2d 3h 15m 30s").
 pub fn format_duration(secs: u64) -> String {
     let days = secs / 86400;
     let hours = (secs % 86400) / 3600;
@@ -45,6 +46,7 @@ pub fn format_duration(secs: u64) -> String {
     }
 }
 
+/// Truncate a string to at most `max_bytes`, respecting UTF-8 char boundaries.
 pub fn truncate_str(s: &str, max_bytes: usize) -> String {
     if s.len() <= max_bytes {
         return s.to_string();
@@ -56,24 +58,32 @@ pub fn truncate_str(s: &str, max_bytes: usize) -> String {
     s[..end].to_string()
 }
 
+/// Truncate, append suffix if truncated, then escape for MarkdownV2.
+pub fn truncate_and_escape(text: &str, max_bytes: usize) -> String {
+    let truncated = truncate_str(text, max_bytes);
+    let suffix = if truncated.len() < text.len() { "\n...(truncated)" } else { "" };
+    md::escape(&format!("{truncated}{suffix}"))
+}
+
 fn should_shutdown(rx: &Receiver<()>) -> bool {
     rx.try_recv().is_ok()
 }
 
+/// Sleep for `dur`, but return early if shutdown signal received.
 async fn sleep_with_shutdown(dur: Duration, rx: &Receiver<()>) {
     let deadline = Instant::now() + dur;
-    loop {
+    while Instant::now() < deadline {
         if should_shutdown(rx) {
-            return;
-        }
-        if Instant::now() >= deadline {
             return;
         }
         tokio::time::sleep(Duration::from_millis(200)).await;
     }
 }
 
-pub async fn run_until(shutdown_rx: Receiver<()>, cfg: config::AppConfig) -> Result<()> {
+/// Run the bot polling loop with exponential backoff retry on failure.
+///
+/// `enable_ctrlc` is true for foreground mode (--run), false for daemon mode.
+pub async fn run_until(shutdown_rx: Receiver<()>, cfg: config::AppConfig, enable_ctrlc: bool) -> Result<()> {
     let bot = Bot::new(&cfg.bot_token);
 
     let state = Arc::new(AgentState {
@@ -84,6 +94,7 @@ pub async fn run_until(shutdown_rx: Receiver<()>, cfg: config::AppConfig) -> Res
         start_time: Instant::now(),
     });
 
+    // Exponential backoff: 5s → 10s → 20s → 40s → 60s (max)
     let mut retry_delay = Duration::from_secs(5);
     let max_delay = Duration::from_secs(60);
 
@@ -100,14 +111,18 @@ pub async fn run_until(shutdown_rx: Receiver<()>, cfg: config::AppConfig) -> Res
 
         let listener = teloxide::update_listeners::polling_default(bot.clone()).await;
 
-        let mut dispatcher = Dispatcher::builder(bot.clone(), router::schema())
+        let mut builder = Dispatcher::builder(bot.clone(), router::schema())
             .dependencies(dptree::deps![state.clone()])
-            .enable_ctrlc_handler()
             .default_handler(|upd| async move {
                 log::trace!("Unhandled update: {:?}", upd);
             })
-            .error_handler(LoggingErrorHandler::with_custom_text("Bot error"))
-            .build();
+            .error_handler(LoggingErrorHandler::with_custom_text("Bot error"));
+
+        if enable_ctrlc {
+            builder = builder.enable_ctrlc_handler();
+        }
+
+        let mut dispatcher = builder.build();
 
         let start = Instant::now();
 
@@ -116,8 +131,9 @@ pub async fn run_until(shutdown_rx: Receiver<()>, cfg: config::AppConfig) -> Res
                 listener,
                 LoggingErrorHandler::with_custom_text("Listener error"),
             ) => {
-                let elapsed = start.elapsed();
-                if elapsed < Duration::from_secs(30) {
+                // Short-lived session (< 30s) likely means TerminatedByOtherGetUpdates.
+                // Don't reset backoff in that case.
+                if start.elapsed() < Duration::from_secs(30) {
                     log::warn!(
                         "Polling terminated (likely by another instance), retrying in {}s...",
                         retry_delay.as_secs()

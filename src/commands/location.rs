@@ -35,8 +35,8 @@ pub async fn location(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Result
                 md::escape(country),
                 md::escape(city),
                 md::escape(isp),
-                lat,
-                lon,
+                md::escape(&lat.to_string()),
+                md::escape(&lon.to_string()),
             )
         }
         Err(_) => format!("*📍 Vị trí IP:*\n\n{}", md::escape(&resp)),

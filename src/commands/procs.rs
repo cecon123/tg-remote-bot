@@ -5,24 +5,24 @@ use teloxide::types::{ChatId, MessageId};
 
 use crate::bot::md;
 
+/// Max number of processes to display in /procs.
+const MAX_PROCS: usize = 30;
+
 pub async fn procs(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Result<()> {
-    let mut sys = System::new_all();
-    sys.refresh_all();
+    let sys = System::new_all();
 
     let mut processes: Vec<&Process> = sys.processes().values().collect();
-    processes.sort_by_key(|b| std::cmp::Reverse(b.memory()));
+    processes.sort_by_key(|p| std::cmp::Reverse(p.memory()));
 
     let lines: Vec<String> = processes
         .iter()
-        .take(30)
-        .map(|p| {
-            format!(
-                "`{}` {} \\- {} MB",
-                p.pid(),
-                md::escape(&p.name().to_string_lossy()),
-                p.memory() / 1024 / 1024
-            )
-        })
+        .take(MAX_PROCS)
+        .map(|p| format!(
+            "`{}` {} \\- {} MB",
+            p.pid(),
+            md::escape(&p.name().to_string_lossy()),
+            p.memory() / 1024 / 1024,
+        ))
         .collect();
 
     let text = if lines.is_empty() {
@@ -36,35 +36,18 @@ pub async fn procs(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Result<()
 
 pub async fn kill_process(bot: &Bot, chat_id: ChatId, reply_to: MessageId, pid: u32) -> Result<()> {
     let mut sys = System::new_all();
-    sys.refresh_all();
+    sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
 
-    if let Some(process) = sys.process(sysinfo::Pid::from(pid as usize)) {
-        let name = process.name().to_string_lossy().to_string();
-        if process.kill() {
-            md::send(
-                bot,
-                chat_id,
-                reply_to,
-                format!("💀 Đã kill: {} \\(PID `{pid}`\\)", md::escape(&name)),
-            )
-            .await?;
-        } else {
-            md::send(
-                bot,
-                chat_id,
-                reply_to,
-                format!("❌ Kill thất bại: PID `{pid}`"),
-            )
-            .await?;
-        }
+    let Some(process) = sys.process(sysinfo::Pid::from(pid as usize)) else {
+        md::send(bot, chat_id, reply_to, format!("❌ Không tìm thấy PID `{pid}`")).await?;
+        return Ok(());
+    };
+
+    let name = process.name().to_string_lossy().to_string();
+    if process.kill() {
+        md::send(bot, chat_id, reply_to, format!("💀 Đã kill: {} \\(PID `{pid}`\\)", md::escape(&name))).await?;
     } else {
-        md::send(
-            bot,
-            chat_id,
-            reply_to,
-            format!("❌ Không tìm thấy PID `{pid}`"),
-        )
-        .await?;
+        md::send(bot, chat_id, reply_to, format!("❌ Kill thất bại: PID `{pid}`")).await?;
     }
 
     Ok(())

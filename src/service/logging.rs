@@ -87,7 +87,6 @@ pub fn init_logger(home_dir: &Path, mode: LogMode) -> Result<()> {
         .chain(fern::Output::call(move |record| {
             if let Ok(mut guard) = file_mutex.lock() {
                 let _ = writeln!(guard, "{}", record.args());
-                let _ = guard.flush();
             }
         }));
 
