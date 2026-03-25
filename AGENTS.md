@@ -137,7 +137,7 @@ src/
 │   ├── camera.rs     # Webcam capture (spawn_blocking)
 │   ├── wallpaper.rs  # Get desktop wallpaper (md::send_document)
 │   ├── wifi.rs       # Saved WiFi profiles + passwords (parse_profile_name helper)
-│   ├── audio.rs      # mute, unmute, volume (Core Audio API via PowerShell)
+│   ├── audio.rs      # mute, unmute, volume (Win32 FFI: waveOutSetVolume + SendInput)
 │   └── msgbox.rs     # MessageBox Win32 (blocking, spawn_blocking)
 ├── security/
 │   ├── dpapi.rs      # CryptProtectData / CryptUnprotectData
@@ -160,6 +160,11 @@ src/
 - **Cleanup:** `.old` files deleted on next startup via `cleanup_old_files()` in `service::install`.
 - **GitHub Release:** Binary must be named `wininit.exe` as release asset.
 - **CI/CD:** `.github/workflows/release.yml` — triggers on `v*` tag push, builds, creates release with `wininit.exe`.
+
+### Console Subsystem
+- Release builds use `#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]` — no console window.
+- Debug builds keep console subsystem for development.
+- `attach_parent_console()` calls `AttachConsole(ATTACH_PARENT_PROCESS)` at startup — reattaches to cmd.exe for `--help`/`--install` output, no-op for Task Scheduler.
 
 ### Win32 API Notes
 - `LockWorkStation` is in `windows_sys::Win32::System::Shutdown` (not `UI::WindowsAndMessaging`).
