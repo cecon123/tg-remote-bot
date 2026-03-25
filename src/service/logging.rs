@@ -60,7 +60,10 @@ impl DailyFile {
 impl Write for DailyFile {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.rotate_if_needed();
-        self.writer.write(buf)
+        let n = self.writer.write(buf)?;
+        // Flush immediately so logs appear in real-time (not just on buffer full).
+        self.writer.flush()?;
+        Ok(n)
     }
 
     fn flush(&mut self) -> io::Result<()> {

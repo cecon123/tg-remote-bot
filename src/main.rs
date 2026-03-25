@@ -61,9 +61,14 @@ fn run_bot(cfg: service::config::AppConfig, enable_ctrlc: bool) -> Result<()> {
 }
 
 fn run_daemon() -> Result<()> {
+    // Detach from console immediately — prevents window flash on Task Scheduler startup.
+    unsafe { windows_sys::Win32::System::Console::FreeConsole(); }
+
     let home = security::obfuscation::install_home();
     if let Err(e) = service::logging::init_logger(home, service::logging::LogMode::Service) {
-        eprintln!("Cannot init logger: {e:?}");
+        // Can't log to console after FreeConsole, write to a fallback file.
+        let fallback = home.join("logs").join("startup_error.log");
+        let _ = std::fs::write(fallback, format!("Cannot init logger: {e:?}"));
     }
 
     check_already_running()?;
