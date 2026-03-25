@@ -61,7 +61,11 @@ pub fn truncate_str(s: &str, max_bytes: usize) -> String {
 /// Truncate, append suffix if truncated, then escape for MarkdownV2.
 pub fn truncate_and_escape(text: &str, max_bytes: usize) -> String {
     let truncated = truncate_str(text, max_bytes);
-    let suffix = if truncated.len() < text.len() { "\n...(truncated)" } else { "" };
+    let suffix = if truncated.len() < text.len() {
+        "\n...(truncated)"
+    } else {
+        ""
+    };
     md::escape(&format!("{truncated}{suffix}"))
 }
 
@@ -83,7 +87,11 @@ async fn sleep_with_shutdown(dur: Duration, rx: &Receiver<()>) {
 /// Run the bot polling loop with exponential backoff retry on failure.
 ///
 /// `enable_ctrlc` is true for foreground mode (--run), false for daemon mode.
-pub async fn run_until(shutdown_rx: Receiver<()>, cfg: config::AppConfig, enable_ctrlc: bool) -> Result<()> {
+pub async fn run_until(
+    shutdown_rx: Receiver<()>,
+    cfg: config::AppConfig,
+    enable_ctrlc: bool,
+) -> Result<()> {
     let bot = Bot::new(&cfg.bot_token);
 
     let state = Arc::new(AgentState {

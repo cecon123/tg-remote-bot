@@ -31,7 +31,11 @@ fn do_toggle_mute() -> Result<()> {
             r#type: INPUT_KEYBOARD,
             Anonymous: windows_sys::Win32::UI::Input::KeyboardAndMouse::INPUT_0 {
                 ki: KEYBDINPUT {
-                    wVk: VK_VOLUME_MUTE, wScan: 0, dwFlags: 0, time: 0, dwExtraInfo: 0,
+                    wVk: VK_VOLUME_MUTE,
+                    wScan: 0,
+                    dwFlags: 0,
+                    time: 0,
+                    dwExtraInfo: 0,
                 },
             },
         },
@@ -39,13 +43,23 @@ fn do_toggle_mute() -> Result<()> {
             r#type: INPUT_KEYBOARD,
             Anonymous: windows_sys::Win32::UI::Input::KeyboardAndMouse::INPUT_0 {
                 ki: KEYBDINPUT {
-                    wVk: VK_VOLUME_MUTE, wScan: 0, dwFlags: KEYEVENTF_KEYUP, time: 0, dwExtraInfo: 0,
+                    wVk: VK_VOLUME_MUTE,
+                    wScan: 0,
+                    dwFlags: KEYEVENTF_KEYUP,
+                    time: 0,
+                    dwExtraInfo: 0,
                 },
             },
         },
     ];
 
-    let sent = unsafe { SendInput(inputs.len() as u32, inputs.as_ptr(), std::mem::size_of::<INPUT>() as i32) };
+    let sent = unsafe {
+        SendInput(
+            inputs.len() as u32,
+            inputs.as_ptr(),
+            std::mem::size_of::<INPUT>() as i32,
+        )
+    };
     if sent == 0 {
         anyhow::bail!("SendInput failed");
     }
@@ -62,7 +76,12 @@ pub async fn unmute(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Result<(
     md::send(bot, chat_id, reply_to, "🔊 Đã bật âm".to_string()).await
 }
 
-pub async fn set_volume_cmd(bot: &Bot, chat_id: ChatId, reply_to: MessageId, level: u8) -> Result<()> {
+pub async fn set_volume_cmd(
+    bot: &Bot,
+    chat_id: ChatId,
+    reply_to: MessageId,
+    level: u8,
+) -> Result<()> {
     let level = level.min(100);
     tokio::task::spawn_blocking(move || do_set_volume(level)).await??;
     md::send(bot, chat_id, reply_to, format!("🔊 Âm lượng: {}\\%", level)).await

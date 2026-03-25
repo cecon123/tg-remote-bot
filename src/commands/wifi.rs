@@ -24,14 +24,12 @@ async fn get_wifi_password(profile: &str) -> String {
         .await;
 
     match out {
-        Ok(o) => {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .find(|l| l.contains("Key Content"))
-                .and_then(|l| l.split_once(':'))
-                .map(|(_, v)| v.trim().to_string())
-                .unwrap_or_default()
-        }
+        Ok(o) => String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .find(|l| l.contains("Key Content"))
+            .and_then(|l| l.split_once(':'))
+            .map(|(_, v)| v.trim().to_string())
+            .unwrap_or_default(),
         Err(_) => String::new(),
     }
 }
@@ -60,9 +58,16 @@ pub async fn wifi(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Result<()>
     for profile in &profiles {
         let password = get_wifi_password(profile).await;
         if password.is_empty() {
-            result.push_str(&format!("{} \\- _không có mật khẩu_\n", md::escape(profile)));
+            result.push_str(&format!(
+                "{} \\- _không có mật khẩu_\n",
+                md::escape(profile)
+            ));
         } else {
-            result.push_str(&format!("{} \\- {}\n", md::escape(profile), md::escape(&password)));
+            result.push_str(&format!(
+                "{} \\- {}\n",
+                md::escape(profile),
+                md::escape(&password)
+            ));
         }
     }
 

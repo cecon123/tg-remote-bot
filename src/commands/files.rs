@@ -12,7 +12,13 @@ const MAX_GETFILE_BYTES: u64 = 50 * 1024 * 1024;
 pub async fn listfiles(bot: &Bot, chat_id: ChatId, reply_to: MessageId, path: &str) -> Result<()> {
     let dir = Path::new(path);
     if !dir.exists() {
-        md::send(bot, chat_id, reply_to, "❌ Đường dẫn không tồn tại".to_string()).await?;
+        md::send(
+            bot,
+            chat_id,
+            reply_to,
+            "❌ Đường dẫn không tồn tại".to_string(),
+        )
+        .await?;
         return Ok(());
     }
     if !dir.is_dir() {
@@ -61,7 +67,10 @@ pub async fn getfile(bot: &Bot, chat_id: ChatId, reply_to: MessageId, path: &str
             bot,
             chat_id,
             reply_to,
-            format!("❌ File quá lớn \\(>{}MB\\)", MAX_GETFILE_BYTES / 1024 / 1024),
+            format!(
+                "❌ File quá lớn \\(>{}MB\\)",
+                MAX_GETFILE_BYTES / 1024 / 1024
+            ),
         )
         .await?;
         return Ok(());
@@ -73,5 +82,12 @@ pub async fn getfile(bot: &Bot, chat_id: ChatId, reply_to: MessageId, path: &str
         .to_string_lossy()
         .to_string();
 
-    md::send_document(bot, chat_id, reply_to, InputFile::file(file), format!("📄 {}", md::escape(&filename))).await
+    md::send_document(
+        bot,
+        chat_id,
+        reply_to,
+        InputFile::file(file),
+        format!("📄 {}", md::escape(&filename)),
+    )
+    .await
 }

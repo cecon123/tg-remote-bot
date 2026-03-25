@@ -26,7 +26,18 @@ async fn run_shutdown_cmd(
         std::process::Command::new("shutdown").args(&args).status()
     })
     .await??;
-    md::send(bot, chat_id, reply_to, if status.success() { success_msg } else { fail_msg }.to_string()).await
+    md::send(
+        bot,
+        chat_id,
+        reply_to,
+        if status.success() {
+            success_msg
+        } else {
+            fail_msg
+        }
+        .to_string(),
+    )
+    .await
 }
 
 pub async fn shutdown(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Result<()> {

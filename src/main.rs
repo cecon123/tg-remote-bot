@@ -1,3 +1,7 @@
+// Release builds use Windows subsystem (no console window).
+// Debug builds keep console for development convenience.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use std::env;
 use std::sync::mpsc;
 use std::thread;
@@ -49,6 +53,28 @@ fn init_foreground_logger() {
     }
 }
 
+/// Attach to the parent process's console (e.g., cmd.exe) so that
+/// println!/eprintln! output is visible when run from a terminal.
+/// Fails silently if no parent console exists (e.g., Task Scheduler).
+fn attach_parent_console() {
+    unsafe {
+        // ATTACH_PARENT_PROCESS = 0xFFFFFFFF
+        windows_sys::Win32::System::Console::AttachConsole(u32::MAX);
+    }
+}
+
+/// Hide the console window if one exists. Called at daemon startup
+/// to prevent the brief flash when Task Scheduler launches the process.
+fn hide_console() {
+    unsafe {
+        let hwnd = windows_sys::Win32::System::Console::GetConsoleWindow();
+        if !hwnd.is_null() {
+            // SW_HIDE = 0
+            windows_sys::Win32::UI::WindowsAndMessaging::ShowWindow(hwnd, 0);
+        }
+    }
+}
+
 /// Run the bot with a shutdown channel that can be triggered externally.
 fn run_bot(cfg: service::config::AppConfig, enable_ctrlc: bool) -> Result<()> {
     let (tx, rx) = mpsc::channel();
@@ -61,12 +87,9 @@ fn run_bot(cfg: service::config::AppConfig, enable_ctrlc: bool) -> Result<()> {
 }
 
 fn run_daemon() -> Result<()> {
-    // Detach from console immediately — prevents window flash on Task Scheduler startup.
-    unsafe { windows_sys::Win32::System::Console::FreeConsole(); }
-
+    hide_console();
     let home = security::obfuscation::install_home();
     if let Err(e) = service::logging::init_logger(home, service::logging::LogMode::Service) {
-        // Can't log to console after FreeConsole, write to a fallback file.
         let fallback = home.join("logs").join("startup_error.log");
         let _ = std::fs::write(fallback, format!("Cannot init logger: {e:?}"));
     }
@@ -90,6 +113,11 @@ fn run_daemon() -> Result<()> {
 }
 
 fn main() -> Result<()> {
+    // Reattach to parent console if one exists (e.g., run from cmd.exe).
+    // In release mode (Windows subsystem), this lets --help/--install show output.
+    // If no parent console exists (Task Scheduler), this is a no-op.
+    attach_parent_console();
+
     let args: Vec<String> = env::args().collect();
 
     match args.get(1).map(|s| s.as_str()) {

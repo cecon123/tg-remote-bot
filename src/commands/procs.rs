@@ -17,12 +17,14 @@ pub async fn procs(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Result<()
     let lines: Vec<String> = processes
         .iter()
         .take(MAX_PROCS)
-        .map(|p| format!(
-            "`{}` {} \\- {} MB",
-            p.pid(),
-            md::escape(&p.name().to_string_lossy()),
-            p.memory() / 1024 / 1024,
-        ))
+        .map(|p| {
+            format!(
+                "`{}` {} \\- {} MB",
+                p.pid(),
+                md::escape(&p.name().to_string_lossy()),
+                p.memory() / 1024 / 1024,
+            )
+        })
         .collect();
 
     let text = if lines.is_empty() {
@@ -39,15 +41,33 @@ pub async fn kill_process(bot: &Bot, chat_id: ChatId, reply_to: MessageId, pid: 
     sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
 
     let Some(process) = sys.process(sysinfo::Pid::from(pid as usize)) else {
-        md::send(bot, chat_id, reply_to, format!("❌ Không tìm thấy PID `{pid}`")).await?;
+        md::send(
+            bot,
+            chat_id,
+            reply_to,
+            format!("❌ Không tìm thấy PID `{pid}`"),
+        )
+        .await?;
         return Ok(());
     };
 
     let name = process.name().to_string_lossy().to_string();
     if process.kill() {
-        md::send(bot, chat_id, reply_to, format!("💀 Đã kill: {} \\(PID `{pid}`\\)", md::escape(&name))).await?;
+        md::send(
+            bot,
+            chat_id,
+            reply_to,
+            format!("💀 Đã kill: {} \\(PID `{pid}`\\)", md::escape(&name)),
+        )
+        .await?;
     } else {
-        md::send(bot, chat_id, reply_to, format!("❌ Kill thất bại: PID `{pid}`")).await?;
+        md::send(
+            bot,
+            chat_id,
+            reply_to,
+            format!("❌ Kill thất bại: PID `{pid}`"),
+        )
+        .await?;
     }
 
     Ok(())

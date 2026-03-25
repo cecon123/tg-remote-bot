@@ -30,7 +30,14 @@ pub async fn wallpaper(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Resul
         return Ok(());
     }
 
-    md::send_document(bot, chat_id, reply_to, teloxide::types::InputFile::file(file), "🖼️ *Desktop wallpaper*").await
+    md::send_document(
+        bot,
+        chat_id,
+        reply_to,
+        teloxide::types::InputFile::file(file),
+        "🖼️ *Desktop wallpaper*",
+    )
+    .await
 }
 
 fn read_wallpaper_path() -> Result<String> {

@@ -19,7 +19,11 @@ pub async fn sysinfo(bot: &Bot, chat_id: ChatId, reply_to: MessageId) -> Result<
         .unwrap_or_default();
     let mem_total = sys.total_memory() / 1024 / 1024;
     let mem_used = sys.used_memory() / 1024 / 1024;
-    let mem_pct = if mem_total > 0 { mem_used * 100 / mem_total } else { 0 };
+    let mem_pct = if mem_total > 0 {
+        mem_used * 100 / mem_total
+    } else {
+        0
+    };
     let swap_total = sys.total_swap() / 1024 / 1024;
     let swap_used = sys.used_swap() / 1024 / 1024;
 

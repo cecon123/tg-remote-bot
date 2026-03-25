@@ -42,7 +42,13 @@ pub async fn reply_error(
     label: &str,
     err: impl std::fmt::Display,
 ) -> anyhow::Result<()> {
-    send(bot, chat_id, reply_to, format!("❌ {}", escape(&format!("{label}: {err}")))).await
+    send(
+        bot,
+        chat_id,
+        reply_to,
+        format!("❌ {}", escape(&format!("{label}: {err}"))),
+    )
+    .await
 }
 
 /// Send a photo, replying to the given message.
